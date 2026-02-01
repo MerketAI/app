@@ -1,0 +1,341 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+// ============================================
+// User & Authentication Models
+// ============================================
+
+model User {
+  id            String   @id @default(uuid())
+  email         String?  @unique
+  phone         String?  @unique
+  passwordHash  String?  @map("password_hash")
+  name          String
+  avatarUrl     String?  @map("avatar_url")
+  authProvider  String   @default("EMAIL") @map("auth_provider")
+  role          String   @default("USER") // USER, ADMIN
+  status        String   @default("PENDING")
+  mfaEnabled    Boolean  @default(false) @map("mfa_enabled")
+  mfaSecret     String?  @map("mfa_secret")
+  emailVerified Boolean  @default(false) @map("email_verified")
+  phoneVerified Boolean  @default(false) @map("phone_verified")
+  lastLoginAt   DateTime? @map("last_login_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  profile             UserProfile?
+  subscription        Subscription?
+  contents            Content[]
+  platformConnections PlatformConnection[]
+  creditTransactions  CreditTransaction[]
+  refreshTokens       RefreshToken[]
+  payments            Payment[]
+
+  @@map("users")
+}
+
+model UserProfile {
+  id               String   @id @default(uuid())
+  userId           String   @unique @map("user_id")
+  businessName     String?  @map("business_name")
+  industry         String?
+  description      String?
+  services         String   @default("[]")
+  products         String   @default("[]")
+  targetAudience   String?  @map("target_audience")
+  location         String?
+  timezone         String   @default("UTC")
+  logoUrl          String?  @map("logo_url")
+  brandColors      String?  @map("brand_colors")
+  tonePreference   String   @default("professional") @map("tone_preference")
+  competitors      String   @default("[]")
+  completeness     Int      @default(0)
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_profiles")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  token     String   @unique
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("refresh_tokens")
+}
+
+// ============================================
+// Subscription Plans (Admin-managed)
+// ============================================
+
+model SubscriptionPlan {
+  id                  String   @id @default(uuid())
+  name                String   @unique // STARTER, PROFESSIONAL, BUSINESS, ENTERPRISE
+  displayName         String   @map("display_name")
+  description         String?
+  monthlyPrice        Int      @map("monthly_price") // In paise
+  yearlyPrice         Int      @map("yearly_price") // In paise
+  yearlyDiscount      Int      @default(0) @map("yearly_discount") // Percentage (e.g., 20 for 20%)
+  credits             Int      // Credits per billing cycle
+  features            String   @default("[]") // JSON array of feature strings
+  razorpayMonthlyPlanId String? @map("razorpay_monthly_plan_id")
+  razorpayYearlyPlanId  String? @map("razorpay_yearly_plan_id")
+  isActive            Boolean  @default(true) @map("is_active")
+  isDefault           Boolean  @default(false) @map("is_default") // Default plan for new users
+  sortOrder           Int      @default(0) @map("sort_order")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  @@index([isActive, sortOrder])
+  @@map("subscription_plans")
+}
+
+// ============================================
+// Subscription & Credit Models
+// ============================================
+
+model Subscription {
+  id                   String   @id @default(uuid())
+  userId               String   @unique @map("user_id")
+  tier                 String   @default("STARTER")
+  status               String   @default("ACTIVE")
+  billingCycle         String   @default("MONTHLY") @map("billing_cycle")
+  creditsTotal         Int      @map("credits_total")
+  creditsRemaining     Int      @map("credits_remaining")
+  creditsRollover      Int      @default(0) @map("credits_rollover")
+  stripeCustomerId     String?  @map("stripe_customer_id")
+  stripeSubscriptionId String?  @map("stripe_subscription_id")
+  razorpayCustomerId   String?  @map("razorpay_customer_id")
+  razorpaySubId        String?  @map("razorpay_subscription_id")
+  currentPeriodStart   DateTime @map("current_period_start")
+  currentPeriodEnd     DateTime @map("current_period_end")
+  canceledAt           DateTime? @map("canceled_at")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  payments Payment[]
+
+  @@map("subscriptions")
+}
+
+model CreditTransaction {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  type        String
+  amount      Int
+  balance     Int
+  description String?
+  referenceId String?  @map("reference_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("credit_transactions")
+}
+
+// ============================================
+// Platform Connection Models
+// ============================================
+
+model PlatformConnection {
+  id            String    @id @default(uuid())
+  userId        String    @map("user_id")
+  platform      String
+  status        String    @default("CONNECTED")
+  accountId     String?   @map("account_id")
+  accountName   String?   @map("account_name")
+  accessToken   String    @map("access_token")
+  refreshToken  String?   @map("refresh_token")
+  tokenExpiry   DateTime? @map("token_expiry")
+  scopes        String    @default("[]")
+  metadata      String?
+  lastSyncAt    DateTime? @map("last_sync_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contents Content[]
+
+  @@unique([userId, platform, accountId])
+  @@map("platform_connections")
+}
+
+// ============================================
+// Content Models
+// ============================================
+
+model Content {
+  id               String    @id @default(uuid())
+  userId           String    @map("user_id")
+  connectionId     String?   @map("connection_id")
+  type             String
+  status           String    @default("DRAFT")
+  title            String?
+  caption          String?
+  body             String?
+  hashtags         String    @default("[]")
+  mediaUrls        String    @default("[]") @map("media_urls")
+  thumbnailUrl     String?   @map("thumbnail_url")
+  seoTitle         String?   @map("seo_title")
+  seoDescription   String?   @map("seo_description")
+  seoKeywords      String    @default("[]") @map("seo_keywords")
+  aiPrompt         String?   @map("ai_prompt")
+  aiMetadata       String?   @map("ai_metadata")
+  platformPostId   String?   @map("platform_post_id")
+  platformPostUrl  String?   @map("platform_post_url")
+  scheduledAt      DateTime? @map("scheduled_at")
+  publishedAt      DateTime? @map("published_at")
+  creditsConsumed  Int       @default(0) @map("credits_consumed")
+  errorMessage     String?   @map("error_message")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  user       User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  connection PlatformConnection? @relation(fields: [connectionId], references: [id], onDelete: SetNull)
+  analytics  ContentAnalytics?
+  media      ContentMedia[]
+
+  @@index([userId, status])
+  @@index([userId, scheduledAt])
+  @@map("contents")
+}
+
+model ContentMedia {
+  id          String   @id @default(uuid())
+  contentId   String   @map("content_id")
+  url         String
+  type        String
+  size        Int?
+  width       Int?
+  height      Int?
+  duration    Int?
+  altText     String?  @map("alt_text")
+  order       Int      @default(0)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  content Content @relation(fields: [contentId], references: [id], onDelete: Cascade)
+
+  @@map("content_media")
+}
+
+model ContentAnalytics {
+  id           String   @id @default(uuid())
+  contentId    String   @unique @map("content_id")
+  impressions  Int      @default(0)
+  reach        Int      @default(0)
+  likes        Int      @default(0)
+  comments     Int      @default(0)
+  shares       Int      @default(0)
+  saves        Int      @default(0)
+  clicks       Int      @default(0)
+  engagement   Float    @default(0)
+  lastSyncAt   DateTime @map("last_sync_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  content Content @relation(fields: [contentId], references: [id], onDelete: Cascade)
+
+  @@map("content_analytics")
+}
+
+// ============================================
+// Trending Topics Model
+// ============================================
+
+model TrendingTopic {
+  id          String   @id @default(uuid())
+  topic       String
+  category    String?
+  score       Float    @default(0)
+  hashtags    String   @default("[]")
+  keywords    String   @default("[]")
+  region      String?
+  source      String?
+  expiresAt   DateTime @map("expires_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([category, score])
+  @@index([expiresAt])
+  @@map("trending_topics")
+}
+
+// ============================================
+// Audit Log Model
+// ============================================
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String?  @map("user_id")
+  action     String
+  entityType String   @map("entity_type")
+  entityId   String?  @map("entity_id")
+  oldValue   String?  @map("old_value")
+  newValue   String?  @map("new_value")
+  ipAddress  String?  @map("ip_address")
+  userAgent  String?  @map("user_agent")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([userId, createdAt])
+  @@index([entityType, entityId])
+  @@map("audit_logs")
+}
+
+// ============================================
+// API Credentials Model (for admin-managed secrets)
+// ============================================
+
+model ApiCredential {
+  id          String   @id @default(uuid())
+  key         String   @unique // e.g., "JASPER_API_KEY", "META_APP_ID"
+  value       String   // Encrypted value
+  description String?
+  category    String?  // e.g., "jasper", "meta", "google", "razorpay"
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([category])
+  @@map("api_credentials")
+}
+
+// ============================================
+// Payment Model (Razorpay transactions)
+// ============================================
+
+model Payment {
+  id                String   @id @default(uuid())
+  userId            String   @map("user_id")
+  subscriptionId    String?  @map("subscription_id")
+  razorpayOrderId   String   @unique @map("razorpay_order_id")
+  razorpayPaymentId String?  @map("razorpay_payment_id")
+  razorpaySignature String?  @map("razorpay_signature")
+  amount            Int      // In paise (smallest currency unit)
+  currency          String   @default("INR")
+  status            String   @default("CREATED") // CREATED, PAID, FAILED, REFUNDED
+  planId            String?  @map("plan_id") // Which subscription plan
+  metadata          String?  // JSON string for additional data
+  failureReason     String?  @map("failure_reason")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subscription Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([status])
+  @@map("payments")
+}

@@ -1,0 +1,902 @@
+PRODUCT REQUIREMENTS DOCUMENT
+Marketing Automation Microservice
+Intelligent Agent-Powered Marketing Workflow Orchestration
+Document Information
+Details
+Version
+1.0
+Date
+February 1, 2026
+Author
+Product Team
+Status
+Draft
+Classification
+Internal - Confidential
+Table of Contents
+1. Executive Summary
+2. Overview
+3. Users & Personas
+4. User Journey
+5. Functional Requirements
+6. Non-Functional Requirements
+7. Technical Architecture
+8. Data Requirements
+9. API Specifications
+10. Scope
+11. Timeline & Milestones
+12. Open Questions
+13. Appendix
+1. Executive Summary
+This document outlines the product requirements for a Marketing Automation Microservice that orchestrates intelligent AI agents to execute end-to-end marketing workflows. The platform enables subscribers to automate content creation and distribution across Instagram, Facebook, and Blog platforms while managing advertising campaigns through Meta and Google Ads integration.
+The system leverages AI capabilities (Jasper) to analyze customer demographics, trending topics, and keywords to generate personalized, high-quality marketing content including images, videos, scripts, and written posts. This fully automated approach delivers speed, control, and measurable marketing impact to subscribers operating on a credit-based membership model.
+Key Value Propositions
+Fully automated content creation leveraging AI for trending topic discovery and content generation
+Multi-platform publishing to Instagram, Facebook, and Blog with single-click distribution
+Integrated advertising management for Meta, Google, and Instagram Ads
+Personalized content based on customer profile demographics and business context
+Credit-based membership model providing flexibility and scalability
+2. Overview
+2.1 Purpose
+The Marketing Automation Microservice is designed to democratize professional-grade marketing capabilities for businesses of all sizes. By orchestrating intelligent AI agents, the platform eliminates the need for dedicated marketing teams, expensive agencies, or extensive marketing expertise. Subscribers can achieve consistent, high-quality marketing output with minimal manual intervention.
+2.2 Background
+Modern businesses face significant challenges in maintaining consistent marketing presence across multiple platforms. Content creation is time-consuming, requires specialized skills, and demands continuous adaptation to trending topics and platform algorithms. Small and medium businesses often lack resources for professional marketing teams, resulting in inconsistent brand presence and missed engagement opportunities.
+This platform addresses these pain points by providing an AI-powered solution that handles the entire marketing workflow from ideation to publication, enabling businesses to compete effectively in the digital marketing landscape.
+2.3 Goals & Success Metrics
+Goal
+Metric
+Target
+User Acquisition
+Monthly Active Subscribers
+10,000 in Year 1
+User Retention
+Monthly Churn Rate
+< 5%
+Platform Engagement
+Posts Created per User/Month
+> 20 posts
+Content Quality
+User Satisfaction Score
+> 4.5/5.0
+Revenue
+Monthly Recurring Revenue (MRR)
+$500K by Month 12
+Platform Reliability
+System Uptime
+99.9%
+Publishing Success
+Successful Post Rate
+> 98%
+Ad Campaign ROI
+Average Campaign ROAS
+> 3.0x
+3. Users & Personas
+3.1 Target Users
+Persona
+Description
+Primary Needs
+Small Business Owner (Sarah)
+Runs a local bakery, manages all aspects of business, limited tech expertise, 35-50 years old
+Simple interface, automated posting, local audience targeting, time savings
+Freelance Consultant (Marcus)
+Independent marketing consultant, manages multiple clients, tech-savvy, 28-40 years old
+Multi-brand management, content scheduling, analytics, white-label options
+E-commerce Entrepreneur (Priya)
+Online store owner, sells handmade products, active on social media, 25-35 years old
+Product-focused content, Instagram/Facebook shop integration, ad management
+Content Creator (Alex)
+Influencer/blogger, needs consistent posting schedule, creative content ideas, 22-35 years old
+Trend discovery, creative variations, cross-platform posting, engagement analytics
+Agency Manager (Jordan)
+Manages marketing for multiple clients, needs scalability, 30-45 years old
+Multi-tenant support, team collaboration, reporting, API access
+3.2 User Segments by Membership Tier
+Tier
+Credits/Month
+Target User
+Key Features
+Starter
+100 credits
+Individual entrepreneurs, hobbyists
+Basic content generation, 2 platforms, manual posting
+Professional
+500 credits
+Small businesses, freelancers
+All platforms, auto-posting, basic analytics, ad management
+Business
+2,000 credits
+Growing businesses, consultants
+Priority processing, advanced analytics, API access
+Enterprise
+Custom
+Agencies, large businesses
+White-label, dedicated support, custom integrations
+4. User Journey
+4.1 Onboarding Flow
+Step
+Action
+System Response
+Success Criteria
+1
+User visits landing page
+Display value proposition and signup options
+Clear CTA visibility
+2
+User initiates signup
+Present Email/Phone or SSO options (Google, Facebook, Apple)
+Multiple auth methods available
+3
+User completes authentication
+Create account, send verification (if email/phone)
+Account created successfully
+4
+User verifies account
+Activate account, redirect to onboarding wizard
+Email/Phone verified
+5
+User completes profile
+Collect business info, services, products, location
+Profile 80%+ complete
+6
+User selects membership
+Display tier options, process payment
+Successful payment
+7
+User connects platforms
+OAuth flow for Facebook, Instagram, Google, Meta
+At least 1 platform connected
+8
+User creates first content
+Guided tutorial with AI assistance
+First post generated
+4.2 Core Workflow: Content Creation & Publishing
+Phase 1: Content Initiation
+User selects content type (Instagram Post, Facebook Post, Blog Post)
+System analyzes user profile (geo-location, services, products, industry)
+AI engine (Jasper) identifies trending topics and relevant keywords
+System presents content suggestions with customization options
+Phase 2: Content Generation
+AI generates platform-optimized content (copy, hashtags, CTAs)
+AI creates or sources relevant images/videos
+System applies brand guidelines and tone preferences
+User reviews and optionally edits generated content
+Phase 3: Publishing
+User approves content or schedules for later
+System validates platform requirements (image sizes, character limits)
+Content is published via platform APIs
+System confirms successful posting and logs activity
+5. Functional Requirements
+5.1 Authentication & User Management
+FR-001: Multi-Method Authentication
+Description: The system must support multiple authentication methods including Email/Password, Phone/OTP, and SSO providers.
+User Story: As a new user, I want to sign up using my preferred method (email, phone, or social accounts) so that I can quickly access the platform.
+Acceptance Criteria:
+Email signup with password requirements (min 8 chars, 1 uppercase, 1 number, 1 special char)
+Phone signup with OTP verification (6-digit code, 5-minute expiry)
+SSO integration with Google, Facebook, Apple, and Microsoft
+MFA option for enhanced security
+Password reset flow with secure token
+Priority: Must Have
+FR-002: User Profile Management
+Description: Users must be able to create and manage comprehensive profiles including business information, demographics, and preferences.
+User Story: As a subscriber, I want to maintain a detailed profile so that the AI can generate personalized, relevant content for my business.
+Acceptance Criteria:
+Profile fields: Business name, industry, services/products, target audience
+Location data: Geo-location, service areas, timezone
+Brand assets: Logo upload, color palette, tone preferences
+Competitor tracking: List competitor accounts for trend analysis
+Profile completeness indicator and guided completion wizard
+Priority: Must Have
+5.2 Credit & Membership Management
+FR-003: Credit System
+Description: Implement a credit-based consumption model where actions consume credits based on complexity.
+Credit Consumption Matrix:
+Action
+Credits
+Notes
+Instagram Image Post
+5
+Includes image generation + caption
+Instagram Video Post
+15
+Includes video generation + caption
+Facebook Image Post
+5
+Includes image + caption + hashtags
+Facebook Video Post
+15
+Includes video generation
+Blog Post (500 words)
+10
+Includes SEO optimization
+Blog Post (1000+ words)
+20
+Long-form with images
+Ad Campaign Creation
+25
+Includes audience targeting
+Trend Analysis Report
+10
+Weekly insights report
+Priority: Must Have
+FR-004: Membership Subscription
+Description: Subscription management with tiered plans, automatic renewal, and credit rollover policies.
+Acceptance Criteria:
+Four tier options: Starter, Professional, Business, Enterprise
+Monthly and annual billing options (annual = 2 months free)
+Automatic renewal with 7-day advance notification
+Credit rollover: Up to 50% unused credits roll over (max 1 month)
+Upgrade/downgrade with prorated billing
+Grace period: 7 days post-expiry before account suspension
+Priority: Must Have
+5.3 Content Generation (AI/Jasper Integration)
+FR-005: Trending Topic Discovery
+Description: AI engine analyzes trending topics, keywords, and hashtags relevant to the user's profile and industry.
+User Story: As a subscriber, I want the system to identify trending topics in my industry so that my content stays relevant and engaging.
+Acceptance Criteria:
+Real-time trend analysis from social platforms, news, and industry sources
+Personalized trend scoring based on user profile (location, industry, audience)
+Trending hashtag suggestions with reach estimates
+Seasonal and event-based content recommendations
+Competitor content analysis and gap identification
+Priority: Must Have
+FR-006: Text Content Generation
+Description: AI generates platform-optimized text content including captions, blog posts, and ad copy.
+Acceptance Criteria:
+Platform-specific formatting (Instagram 2200 chars, Facebook optimal length, Blog SEO)
+Tone customization: Professional, casual, humorous, inspirational
+Multi-language support (initial: English, Spanish, French, German)
+SEO optimization for blog content (keywords, meta descriptions, headings)
+A/B variant generation for testing
+Plagiarism and brand safety checks
+Priority: Must Have
+FR-007: Image Generation
+Description: AI generates or sources relevant images for social media posts and blog content.
+Acceptance Criteria:
+AI image generation based on content context and brand guidelines
+Stock image integration with proper licensing
+Platform-optimized dimensions (Instagram square/portrait/landscape, Facebook, etc.)
+Brand overlay capabilities (logo, watermark, color filters)
+Image editing tools (crop, resize, text overlay, filters)
+User image upload with AI enhancement
+Priority: Must Have
+FR-008: Video Generation
+Description: AI generates short-form video content for social media platforms.
+Acceptance Criteria:
+Template-based video creation (15s, 30s, 60s formats)
+Text-to-video generation from scripts
+Stock footage integration
+Music/audio library integration (royalty-free)
+Captions/subtitles auto-generation
+Brand elements integration (intro/outro, logo, colors)
+Priority: Should Have
+5.4 Social Media Publishing
+FR-009: Instagram Integration
+Description: Full Instagram publishing capabilities via Meta Graph API.
+Acceptance Criteria:
+OAuth 2.0 authentication via Facebook/Meta
+Post types: Single image, carousel (up to 10), Reels
+Caption with hashtags (max 30) and mentions
+Schedule posts up to 75 days in advance
+Stories posting (24-hour expiry content)
+Publishing confirmation and error handling
+Priority: Must Have
+FR-010: Facebook Integration
+Description: Full Facebook Page publishing capabilities via Meta Graph API.
+Acceptance Criteria:
+OAuth 2.0 authentication with page management permissions
+Post types: Text, image, video, link, carousel
+Schedule posts with optimal time suggestions
+Cross-posting to linked Instagram (optional)
+Engagement tracking (likes, comments, shares)
+Comment moderation and auto-reply capabilities
+Priority: Must Have
+FR-011: Blog Publishing
+Description: Blog content creation and publishing to connected CMS platforms.
+Acceptance Criteria:
+Integration with WordPress, Wix, Squarespace, Medium APIs
+Rich text formatting (headings, lists, quotes, code blocks)
+Inline image insertion with alt text
+SEO metadata (title, description, keywords, slug)
+Category and tag management
+Draft/publish/schedule options
+Priority: Must Have
+5.5 Advertising Management
+FR-012: Meta Ads Integration
+Description: Create and manage Facebook and Instagram ad campaigns within the platform.
+User Story: As a subscriber, I want to create and manage ad campaigns for Facebook and Instagram so that I can amplify my content reach.
+Acceptance Criteria:
+Meta Business Manager OAuth integration
+Campaign objectives: Awareness, Traffic, Engagement, Leads, Sales
+Audience targeting: Demographics, interests, behaviors, custom audiences
+Budget management: Daily/lifetime budgets, bid strategies
+Ad creative management: Images, videos, carousel, collection
+Performance dashboard: Impressions, reach, clicks, conversions, ROAS
+A/B testing capabilities
+Priority: Should Have
+FR-013: Google Ads Integration
+Description: Create and manage Google Ads campaigns within the platform.
+Acceptance Criteria:
+Google Ads OAuth integration
+Campaign types: Search, Display, YouTube, Performance Max
+Keyword research and suggestion engine
+Ad copy generation with AI
+Bid management and optimization
+Conversion tracking setup assistance
+Performance reporting and optimization suggestions
+Priority: Should Have
+5.6 Platform Connections & OAuth
+FR-014: OAuth Integration Hub
+Description: Centralized management of all third-party platform connections via OAuth.
+Supported Integrations:
+Platform
+OAuth Provider
+Permissions Required
+Capabilities
+Instagram
+Meta/Facebook
+instagram_basic, instagram_content_publish
+Post creation, insights, stories
+Facebook Pages
+Meta/Facebook
+pages_manage_posts, pages_read_engagement
+Post, schedule, analytics
+Google Ads
+Google
+adwords
+Campaign management, reporting
+Google My Business
+Google
+business.manage
+Posts, reviews, updates
+WordPress
+WordPress/OAuth
+posts, media
+Publish, media upload
+Wix
+Wix OAuth
+site.posts.write
+Blog management
+Medium
+Medium OAuth
+publications
+Story publishing
+Priority: Must Have
+6. Non-Functional Requirements
+ID
+Category
+Requirement
+Target
+NFR-001
+Performance
+API response time
+< 500ms for 95th percentile
+NFR-002
+Performance
+Content generation time
+< 30 seconds for text, < 2 min for images
+NFR-003
+Performance
+Page load time
+< 2 seconds (LCP)
+NFR-004
+Scalability
+Concurrent users
+Support 50,000 concurrent users
+NFR-005
+Scalability
+Daily posts processed
+Handle 1 million posts/day
+NFR-006
+Availability
+System uptime
+99.9% (< 8.76 hours downtime/year)
+NFR-007
+Availability
+Recovery Time Objective
+< 1 hour
+NFR-008
+Availability
+Recovery Point Objective
+< 15 minutes
+NFR-009
+Security
+Data encryption
+AES-256 at rest, TLS 1.3 in transit
+NFR-010
+Security
+Authentication
+OAuth 2.0 + JWT, MFA support
+NFR-011
+Security
+Compliance
+GDPR, CCPA, SOC 2 Type II
+NFR-012
+Security
+API security
+Rate limiting, API key rotation
+NFR-013
+Usability
+Accessibility
+WCAG 2.1 AA compliance
+NFR-014
+Usability
+Mobile responsive
+Full functionality on mobile devices
+NFR-015
+Maintainability
+Code coverage
+Minimum 80% test coverage
+NFR-016
+Maintainability
+Documentation
+OpenAPI 3.0 specs, inline code docs
+7. Technical Architecture
+7.1 System Architecture Overview
+The Marketing Automation Microservice follows a cloud-native, microservices architecture pattern designed for scalability, resilience, and maintainability.
+Core Services:
+API Gateway: Request routing, rate limiting, authentication
+User Service: Authentication, profile management, preferences
+Billing Service: Subscription, credits, payments (Stripe integration)
+Content Service: AI orchestration, content generation, storage
+Publishing Service: Platform integrations, scheduling, delivery
+Analytics Service: Engagement tracking, reporting, insights
+Notification Service: Email, push, in-app notifications
+Ad Management Service: Meta/Google Ads API integration
+7.2 Technology Stack
+Layer
+Technology
+Justification
+API Gateway
+Kong / AWS API Gateway
+Enterprise-grade routing, rate limiting, auth
+Backend Services
+Node.js (NestJS) / Python (FastAPI)
+High performance, async processing
+AI/ML Engine
+OpenAI GPT-4, DALL-E, Jasper API
+State-of-the-art content generation
+Message Queue
+Apache Kafka / RabbitMQ
+Event-driven async processing
+Cache
+Redis Cluster
+Session management, rate limiting, caching
+Primary Database
+PostgreSQL (Aurora)
+Relational data, ACID compliance
+Document Store
+MongoDB
+Content storage, flexible schema
+Search Engine
+Elasticsearch
+Full-text search, analytics
+Object Storage
+AWS S3
+Media files, generated content
+CDN
+CloudFront / Cloudflare
+Global content delivery
+Container Orchestration
+Kubernetes (EKS)
+Scalable deployment, auto-healing
+Monitoring
+Datadog / Prometheus + Grafana
+Observability, alerting
+7.3 Integration Architecture
+All third-party integrations follow a standardized adapter pattern with the following components:
+OAuth Manager: Centralized token storage, refresh handling, scope management
+Platform Adapters: Abstraction layer for each platform (Meta, Google, WordPress, etc.)
+Webhook Handlers: Inbound event processing from platforms
+Rate Limiter: Platform-specific rate limit management
+Retry Queue: Failed request retry with exponential backoff
+8. Data Requirements
+8.1 Core Data Entities
+User Entity
+Field
+Type
+Constraints
+Description
+id
+UUID
+PK, NOT NULL
+Unique identifier
+email
+VARCHAR(255)
+UNIQUE, NOT NULL
+Primary email address
+phone
+VARCHAR(20)
+UNIQUE, NULL
+Phone number with country code
+password_hash
+VARCHAR(255)
+NULL (SSO users)
+Bcrypt hashed password
+auth_provider
+ENUM
+email, google, facebook, apple
+Authentication method
+status
+ENUM
+pending, active, suspended
+Account status
+created_at
+TIMESTAMP
+NOT NULL
+Registration timestamp
+last_login
+TIMESTAMP
+NULL
+Last successful login
+Subscription Entity
+Field
+Type
+Constraints
+Description
+id
+UUID
+PK, NOT NULL
+Unique identifier
+user_id
+UUID
+FK -> users.id
+Subscriber reference
+tier
+ENUM
+starter, professional, business, enterprise
+Membership tier
+credits_total
+INTEGER
+NOT NULL
+Monthly credit allocation
+credits_remaining
+INTEGER
+NOT NULL
+Available credits
+billing_cycle
+ENUM
+monthly, annual
+Payment frequency
+started_at
+TIMESTAMP
+NOT NULL
+Subscription start date
+expires_at
+TIMESTAMP
+NOT NULL
+Current period end
+stripe_subscription_id
+VARCHAR(255)
+NOT NULL
+Stripe reference
+Content Entity
+Field
+Type
+Constraints
+Description
+id
+UUID
+PK, NOT NULL
+Unique identifier
+user_id
+UUID
+FK -> users.id
+Content owner
+type
+ENUM
+instagram_post, facebook_post, blog_post
+Content type
+status
+ENUM
+draft, scheduled, published, failed
+Publishing status
+content_data
+JSONB
+NOT NULL
+Platform-specific content
+media_urls
+TEXT[]
+NULL
+Associated media files
+scheduled_at
+TIMESTAMP
+NULL
+Scheduled publish time
+published_at
+TIMESTAMP
+NULL
+Actual publish time
+platform_post_id
+VARCHAR(255)
+NULL
+External platform reference
+credits_consumed
+INTEGER
+NOT NULL
+Credits used for generation
+8.2 Data Privacy & Compliance
+GDPR: Right to access, rectification, erasure, data portability
+CCPA: Consumer rights disclosure, opt-out mechanisms
+Data Retention: User data retained 90 days post-deletion request
+Third-party Data: OAuth tokens encrypted, minimal scope permissions
+Audit Logging: All data access and modifications logged
+Data Localization: EU user data stored in EU regions (AWS eu-west-1)
+9. API Specifications
+9.1 Authentication APIs
+POST /api/v1/auth/register
+Register a new user account via email or phone.
+Parameter
+Type
+Required
+Description
+email
+string
+Yes*
+User email address
+phone
+string
+Yes*
+Phone with country code (+1234567890)
+password
+string
+Yes
+Min 8 chars, complexity required
+name
+string
+Yes
+Display name
+*Either email or phone required
+POST /api/v1/auth/login
+Authenticate user and return access token.
+Parameter
+Type
+Required
+Description
+email
+string
+Yes*
+User email or phone
+password
+string
+Yes
+User password
+mfa_code
+string
+Conditional
+6-digit MFA code if enabled
+POST /api/v1/auth/oauth/{provider}
+Initiate SSO authentication flow. Providers: google, facebook, apple
+9.2 Content Generation APIs
+POST /api/v1/content/generate
+Generate AI-powered content for specified platform.
+Parameter
+Type
+Required
+Description
+platform
+string
+Yes
+instagram, facebook, blog
+content_type
+string
+Yes
+image_post, video_post, article
+topic
+string
+No
+Specific topic (auto-suggested if empty)
+tone
+string
+No
+professional, casual, humorous
+length
+string
+No
+short, medium, long
+include_media
+boolean
+No
+Generate accompanying media
+9.3 Publishing APIs
+POST /api/v1/publish/{platform}
+Publish or schedule content to specified platform.
+Parameter
+Type
+Required
+Description
+content_id
+string
+Yes
+Generated content reference
+schedule_at
+ISO8601
+No
+Future publish time (null = immediate)
+cross_post
+string[]
+No
+Additional platforms for cross-posting
+10. Scope
+10.1 In Scope (MVP)
+User authentication (Email, Phone, Google SSO, Facebook SSO)
+Credit-based membership with 4 tiers
+AI content generation (text, images) via Jasper integration
+Instagram posting (images, carousels)
+Facebook Page posting (images, text, links)
+Blog posting (WordPress integration)
+Content scheduling
+Basic analytics dashboard
+Platform OAuth connection management
+Web application (responsive)
+10.2 Phase 2 (Post-MVP)
+Video generation capabilities
+Instagram Reels and Stories
+Meta Ads campaign management
+Google Ads integration
+Advanced analytics and reporting
+Team collaboration features
+Native mobile apps (iOS, Android)
+White-label/agency features
+10.3 Out of Scope
+Twitter/X integration (API access limitations)
+TikTok integration (planned for future)
+LinkedIn integration (planned for future)
+E-commerce platform integrations (Shopify, WooCommerce)
+CRM integrations
+Custom AI model training
+On-premise deployment options
+10.4 Assumptions
+Meta Graph API access will be maintained with current capabilities
+Jasper AI API will remain available with current pricing
+Users have existing social media business accounts
+Target users have reliable internet connectivity
+Payment processing via Stripe in supported regions
+10.5 Dependencies
+Meta Graph API for Facebook/Instagram
+Google APIs for Ads and GMB
+Jasper AI API for content generation
+Stripe for payment processing
+AWS infrastructure availability
+Third-party CMS APIs (WordPress, Wix, etc.)
+11. Timeline & Milestones
+Phase
+Timeline
+Deliverables
+Dependencies
+Discovery & Design
+Weeks 1-4
+PRD finalization, UI/UX designs, architecture docs
+Stakeholder approval
+Foundation
+Weeks 5-8
+Auth system, user management, database setup, CI/CD
+Design approval
+Core Services
+Weeks 9-14
+Content service, AI integration, credit system
+Foundation complete
+Platform Integration
+Weeks 15-18
+Instagram, Facebook, Blog publishing
+API access approved
+Billing & Subscriptions
+Weeks 19-20
+Stripe integration, membership tiers
+Business terms finalized
+Testing & QA
+Weeks 21-23
+Integration testing, UAT, performance testing
+All features complete
+Beta Launch
+Week 24
+Limited beta release, feedback collection
+QA sign-off
+MVP Launch
+Week 26
+Public launch, monitoring, support setup
+Beta feedback addressed
+11.1 Key Milestones
+M1 (Week 4): PRD and design approval
+M2 (Week 8): Authentication and user management live
+M3 (Week 14): Content generation operational
+M4 (Week 18): All social platforms integrated
+M5 (Week 24): Beta launch
+M6 (Week 26): MVP public launch
+12. Open Questions
+#
+Question
+Owner
+Due Date
+Status
+1
+What is the pricing for each membership tier?
+Product/Finance
+Week 2
+Open
+2
+Which Jasper AI plan will be used? Enterprise or API?
+Engineering
+Week 2
+Open
+3
+Will video generation be included in MVP or Phase 2?
+Product
+Week 1
+Open
+4
+What are the credit rollover limits per tier?
+Product/Finance
+Week 2
+Open
+5
+Is Apple SSO required for MVP?
+Product
+Week 1
+Open
+6
+What languages should be supported at launch?
+Product
+Week 2
+Open
+7
+Are there specific compliance requirements beyond GDPR/CCPA?
+Legal
+Week 3
+Open
+8
+What is the support model for enterprise customers?
+Operations
+Week 4
+Open
+9
+Should blog publishing support custom CMS via API?
+Engineering
+Week 3
+Open
+10
+What analytics metrics are priority for MVP dashboard?
+Product
+Week 2
+Open
+13. Appendix
+A. Glossary
+Term
+Definition
+Jasper
+AI content generation platform used for text and creative content
+OAuth 2.0
+Industry-standard protocol for authorization
+SSO
+Single Sign-On - authentication using third-party providers
+MFA
+Multi-Factor Authentication - additional security verification
+Meta Graph API
+Facebook/Instagram API for content publishing
+Credit
+Unit of consumption for platform actions
+ROAS
+Return on Ad Spend - advertising efficiency metric
+CMS
+Content Management System (WordPress, Wix, etc.)
+JWT
+JSON Web Token - secure token format for authentication
+LCP
+Largest Contentful Paint - web performance metric
+B. References
+Meta Graph API Documentation: developers.facebook.com/docs/graph-api
+Google Ads API: developers.google.com/google-ads/api
+Jasper AI API: jasper.ai/api
+Stripe API: stripe.com/docs/api
+WordPress REST API: developer.wordpress.org/rest-api
+OAuth 2.0 Specification: oauth.net/2
+C. Revision History
+Version
+Date
+Author
+Changes
+1.0
+2/1/2026
+Product Team
+Initial draft
+ƒ?" End of Document ƒ?"
