@@ -36,6 +36,7 @@ model User {
   creditTransactions  CreditTransaction[]
   refreshTokens       RefreshToken[]
   payments            Payment[]
+  workspace           Workspace?
 
   @@map("users")
 }
@@ -45,23 +46,334 @@ model UserProfile {
   userId           String   @unique @map("user_id")
   businessName     String?  @map("business_name")
   industry         String?
+  subIndustry      String?  @map("sub_industry")
   description      String?
+  mission          String?  // Company mission statement
+  vision           String?  // Company vision
+  foundedYear      Int?     @map("founded_year")
+  employeeCount    String?  @map("employee_count") // "1-10", "11-50", "51-200", etc.
+  annualRevenue    String?  @map("annual_revenue") // Revenue range
+  businessModel    String?  @map("business_model") // B2B, B2C, B2B2C, etc.
+
+  // Legacy fields (kept for backward compatibility)
   services         String   @default("[]")
   products         String   @default("[]")
+  competitors      String   @default("[]")
+
+  // Location & Contact
   targetAudience   String?  @map("target_audience")
   location         String?
+  country          String?
+  city             String?
   timezone         String   @default("UTC")
+  website          String?
+  socialLinks      String   @default("{}") @map("social_links") // JSON: {facebook, instagram, linkedin, etc.}
+
+  // Branding - Basic
   logoUrl          String?  @map("logo_url")
   brandColors      String?  @map("brand_colors")
+  brandVoice       String?  @map("brand_voice") // e.g., "professional", "friendly", "bold"
   tonePreference   String   @default("professional") @map("tone_preference")
-  competitors      String   @default("[]")
+  toneAttributes   String   @default("[]") @map("tone_attributes") // JSON array: ["Confident", "Empathetic", etc.]
+  formality        String?  // "very_formal", "formal", "neutral", "casual", "very_casual"
+  communicationStyle String? @map("communication_style")
+
+  // Brand Personality
+  brandPersonality String?  @map("brand_personality") // Free-text description
+  brandArchetype   String?  @map("brand_archetype") // "hero", "creator", "sage", etc.
+  personalityTraits String  @default("[]") @map("personality_traits") // JSON array
+
+  // Messaging
+  tagline          String?  // Brand tagline/slogan
+  elevatorPitch    String?  @map("elevator_pitch") // 30-60 second pitch
+  keyMessages      String   @default("[]") @map("key_messages") // JSON array of core messages
+
+  // Content Guidelines
+  writingStyle     String?  @map("writing_style") // "concise", "detailed", "storytelling", etc.
+  contentThemes    String   @default("[]") @map("content_themes") // JSON array of themes
+  topicsToAvoid    String   @default("[]") @map("topics_to_avoid") // JSON array
+  brandKeywords    String   @default("[]") @map("brand_keywords") // Keywords that define the brand
+  phraseExamples   String   @default("[]") @map("phrase_examples") // JSON array of example phrases
+
+  // Brand Do's and Don'ts
+  brandDos         String   @default("[]") @map("brand_dos") // JSON array
+  brandDonts       String   @default("[]") @map("brand_donts") // JSON array
+
+  // Visual Identity (descriptions for AI understanding)
+  primaryColors    String?  @map("primary_colors") // e.g., "Deep blue (#1a365d), White"
+  secondaryColors  String?  @map("secondary_colors")
+  fontStyle        String?  @map("font_style") // e.g., "Modern sans-serif"
+  visualStyle      String?  @map("visual_style") // "Minimalist", "Bold & Vibrant", etc.
+
+  // Market Position
+  uniqueSellingPoints String @default("[]") @map("unique_selling_points") // JSON array of USPs
+  valueProposition    String? @map("value_proposition")
+  marketPosition      String? @map("market_position") // "Leader", "Challenger", "Niche", etc.
+  pricingStrategy     String? @map("pricing_strategy") // "Premium", "Value", "Competitive", etc.
+
   completeness     Int      @default(0)
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @updatedAt @map("updated_at")
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user             User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  businessProducts BusinessProduct[]
+  businessServices BusinessService[]
+  businessCompetitors BusinessCompetitor[]
+  targetAudiences  TargetAudience[]
 
   @@map("user_profiles")
+}
+
+// ============================================
+// Business Products Model
+// ============================================
+
+model BusinessProduct {
+  id               String   @id @default(uuid())
+  profileId        String   @map("profile_id")
+  name             String
+  slug             String?
+  description      String?
+  shortDescription String?  @map("short_description")
+  category         String?
+  subCategory      String?  @map("sub_category")
+
+  // Pricing
+  priceType        String   @default("FIXED") @map("price_type") // FIXED, RANGE, CUSTOM, FREE
+  price            Float?
+  priceMin         Float?   @map("price_min")
+  priceMax         Float?   @map("price_max")
+  currency         String   @default("USD")
+  pricingModel     String?  @map("pricing_model") // "One-time", "Subscription", "Per-user", etc.
+
+  // Details
+  features         String   @default("[]") // JSON array of features
+  benefits         String   @default("[]") // JSON array of benefits
+  specifications   String   @default("{}") // JSON object of specs
+  images           String   @default("[]") // JSON array of image URLs
+
+  // Target
+  targetMarket     String?  @map("target_market")
+  idealCustomer    String?  @map("ideal_customer")
+  useCases         String   @default("[]") @map("use_cases") // JSON array
+
+  // Competitive
+  competitors      String   @default("[]") // JSON array of competitor product names
+  differentiators  String   @default("[]") // JSON array of what makes this unique
+
+  // SEO & Marketing
+  keywords         String   @default("[]") // JSON array of keywords
+  hashtags         String   @default("[]") // JSON array of hashtags
+
+  isActive         Boolean  @default(true) @map("is_active")
+  isFeatured       Boolean  @default(false) @map("is_featured")
+  sortOrder        Int      @default(0) @map("sort_order")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  profile          UserProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, slug])
+  @@index([profileId, isActive])
+  @@map("business_products")
+}
+
+// ============================================
+// Business Services Model
+// ============================================
+
+model BusinessService {
+  id               String   @id @default(uuid())
+  profileId        String   @map("profile_id")
+  name             String
+  slug             String?
+  description      String?
+  shortDescription String?  @map("short_description")
+  category         String?
+
+  // Pricing
+  priceType        String   @default("CUSTOM") @map("price_type") // FIXED, HOURLY, RETAINER, RANGE, CUSTOM
+  price            Float?
+  priceMin         Float?   @map("price_min")
+  priceMax         Float?   @map("price_max")
+  currency         String   @default("USD")
+  pricingUnit      String?  @map("pricing_unit") // "Per Hour", "Per Day", "Per Project", etc.
+  billingFrequency String?  @map("billing_frequency") // "One-time", "Monthly", "Quarterly", etc.
+
+  // Details
+  deliverables     String   @default("[]") // JSON array of deliverables
+  process          String   @default("[]") // JSON array of process steps
+  requirements     String   @default("[]") // JSON array - what client needs to provide
+  benefits         String   @default("[]") // JSON array of benefits
+  duration         String?  // Typical duration
+
+  // Target
+  targetMarket     String?  @map("target_market")
+  idealClient      String?  @map("ideal_client")
+  industries       String   @default("[]") // JSON array of target industries
+
+  // Competitive
+  competitors      String   @default("[]") // JSON array of competitor service names
+  differentiators  String   @default("[]") // JSON array
+
+  // SEO & Marketing
+  keywords         String   @default("[]")
+  hashtags         String   @default("[]")
+
+  isActive         Boolean  @default(true) @map("is_active")
+  isFeatured       Boolean  @default(false) @map("is_featured")
+  sortOrder        Int      @default(0) @map("sort_order")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  profile          UserProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, slug])
+  @@index([profileId, isActive])
+  @@map("business_services")
+}
+
+// ============================================
+// Business Competitors Model
+// ============================================
+
+model BusinessCompetitor {
+  id               String   @id @default(uuid())
+  profileId        String   @map("profile_id")
+  name             String
+  website          String?
+  description      String?
+  industry         String?
+  size             String?  // Company size
+  founded          String?  // Founded year
+  headquarters     String?
+
+  // Social Presence
+  facebookUrl      String?  @map("facebook_url")
+  instagramUrl     String?  @map("instagram_url")
+  twitterUrl       String?  @map("twitter_url")
+  linkedinUrl      String?  @map("linkedin_url")
+  youtubeUrl       String?  @map("youtube_url")
+  tiktokUrl        String?  @map("tiktok_url")
+
+  // Market Info
+  marketPosition   String?  @map("market_position") // "Direct", "Indirect", "Potential"
+  marketShare      String?  @map("market_share") // Estimated market share
+  pricePosition    String?  @map("price_position") // "Budget", "Value", "Premium", etc.
+  targetAudience   String?  @map("target_audience")
+  pricingStrategy  String?  @map("pricing_strategy")
+
+  // SWOT Analysis
+  strengths        String   @default("[]") // JSON array
+  weaknesses       String   @default("[]") // JSON array
+  opportunities    String   @default("[]") // JSON array (for you)
+  threats          String   @default("[]") // JSON array (to you)
+
+  // Products & Services
+  products         String   @default("[]") // JSON array
+  services         String   @default("[]") // JSON array
+  uniqueFeatures   String   @default("[]") @map("unique_features") // JSON array
+
+  // Content & Ads Strategy
+  contentStrategy  String?  @map("content_strategy") // Description of their content approach
+  adPlatforms      String   @default("[]") @map("ad_platforms") // JSON: ["Facebook", "Google", etc.]
+  adStrategies     String   @default("[]") @map("ad_strategies") // JSON array of observed strategies
+  adBudgetEstimate String?  @map("ad_budget_estimate") // Estimated ad spend
+  topPerformingAds String?  @map("top_performing_ads") // Notes on best ads
+  contentTypes     String   @default("[]") @map("content_types") // JSON array
+  postingFrequency String?  @map("posting_frequency") // How often they post
+  engagementLevel  String?  @map("engagement_level") // "Very Low" to "Very High"
+
+  // Performance (estimated/observed)
+  socialFollowers  String   @default("{}") @map("social_followers") // JSON: {facebook: 10000, etc.}
+  engagementRate   Float?   @map("engagement_rate")
+
+  // Threat level & notes
+  threatLevel      String   @default("MEDIUM") @map("threat_level") // LOW, MEDIUM, HIGH
+  notes            String?  // Additional notes
+  isActive         Boolean  @default(true) @map("is_active")
+  lastAnalyzedAt   DateTime? @map("last_analyzed_at")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  profile          UserProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([profileId, isActive])
+  @@map("business_competitors")
+}
+
+// ============================================
+// Target Audience Model
+// ============================================
+
+model TargetAudience {
+  id               String   @id @default(uuid())
+  profileId        String   @map("profile_id")
+  name             String   // Persona name, e.g., "Tech-Savvy Millennials"
+  description      String?
+  isPrimary        Boolean  @default(false) @map("is_primary")
+
+  // Demographics
+  ageMin           Int?     @map("age_min")
+  ageMax           Int?     @map("age_max")
+  gender           String?  // "Male", "Female", "All", "Non-binary"
+  incomeLevel      String?  @map("income_level") // "Low", "Middle", "Upper-Middle", "High"
+  educationLevel   String?  @map("education_level")
+  occupation       String?
+  location         String?  // Single location field
+  jobTitles        String   @default("[]") @map("job_titles") // JSON array for B2B
+  industries       String   @default("[]") // JSON array for B2B
+  companySize      String?  @map("company_size") // For B2B
+
+  // Location (multiple)
+  locations        String   @default("[]") // JSON array of target locations
+  languages        String   @default("[]") // JSON array of languages
+
+  // Psychographics
+  interests        String   @default("[]") // JSON array
+  hobbies          String   @default("[]") // JSON array
+  values           String   @default("[]") // JSON array (what they value)
+  lifestyle        String?  // Description of lifestyle
+  personality      String?  // Personality traits
+
+  // Behavior
+  buyingBehavior   String?  @map("buying_behavior") // Description
+  buyingFrequency  String?  @map("buying_frequency") // "Daily", "Weekly", etc.
+  avgOrderValue    String?  @map("avg_order_value") // e.g., "$50-100"
+  decisionFactors  String   @default("[]") @map("decision_factors") // JSON array
+  purchaseFrequency String? @map("purchase_frequency")
+  preferredChannels String  @default("[]") @map("preferred_channels") // JSON array
+  deviceUsage      String   @default("[]") @map("device_usage") // JSON array
+
+  // Pain Points & Goals
+  painPoints       String   @default("[]") @map("pain_points") // JSON array
+  goals            String   @default("[]") // JSON array
+  challenges       String   @default("[]") // JSON array
+  motivations      String   @default("[]") // JSON array
+  objections       String   @default("[]") // JSON array (common objections to buying)
+
+  // Content Preferences
+  contentPreferences String @default("[]") @map("content_preferences") // JSON: ["Video", "Blog", etc.]
+  contentFormats   String   @default("[]") @map("content_formats") // JSON array
+  socialPlatforms  String   @default("[]") @map("social_platforms") // JSON array
+  bestPostingTimes String   @default("{}") @map("best_posting_times") // JSON object
+  communicationStyle String? @map("communication_style")
+
+  // Messaging
+  messagingTone    String?  @map("messaging_tone")
+  keyMessages      String   @default("[]") @map("key_messages") // JSON array
+  avoidTopics      String   @default("[]") @map("avoid_topics") // JSON array
+
+  notes            String?  // Additional notes
+  isActive         Boolean  @default(true) @map("is_active")
+  sortOrder        Int      @default(0) @map("sort_order")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  profile          UserProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([profileId, isActive])
+  @@map("target_audiences")
 }
 
 model RefreshToken {
@@ -338,4 +650,105 @@ model Payment {
   @@index([userId, createdAt])
   @@index([status])
   @@map("payments")
+}
+
+// ============================================
+// Workspace & Page Builder Models
+// ============================================
+
+model Workspace {
+  id            String   @id @default(uuid())
+  userId        String   @unique @map("user_id")
+  name          String   // Display name
+  slug          String   @unique // Subdomain: slug.jeeper.app
+  description   String?
+  logo          String?  // URL to logo
+  favicon       String?  // URL to favicon
+  settings      String   @default("{}") // JSON: theme colors, fonts, etc.
+  isPublished   Boolean  @default(false) @map("is_published")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pages         WorkspacePage[]
+  posts         WorkspacePost[]
+  menus         WorkspaceMenu[]
+
+  @@map("workspaces")
+}
+
+model WorkspacePage {
+  id            String    @id @default(uuid())
+  workspaceId   String    @map("workspace_id")
+  title         String
+  slug          String    // URL path: /about, /services
+  description   String?   // SEO description
+  content       String    @default("[]") // JSON array of page sections/blocks
+  htmlContent   String?   @map("html_content") // Rendered HTML with Tailwind classes
+  cssContent    String?   @map("css_content") // Custom CSS if any
+  status        String    @default("DRAFT") // DRAFT, PUBLISHED
+  isHomePage    Boolean   @default(false) @map("is_home_page")
+  seoTitle      String?   @map("seo_title")
+  seoKeywords   String?   @map("seo_keywords")
+  sortOrder     Int       @default(0) @map("sort_order")
+  publishedAt   DateTime? @map("published_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, slug])
+  @@index([workspaceId, status])
+  @@map("workspace_pages")
+}
+
+model WorkspacePost {
+  id              String    @id @default(uuid())
+  workspaceId     String    @map("workspace_id")
+  title           String
+  slug            String
+  excerpt         String?
+  content         String    @default("") // HTML content
+  featuredImage   String?   @map("featured_image")
+  status          String    @default("DRAFT") // DRAFT, PUBLISHED
+  publishedAt     DateTime? @map("published_at")
+
+  // WordPress sync
+  wpPostId        String?   @map("wp_post_id") // WordPress post ID if synced
+  wpSyncedAt      DateTime? @map("wp_synced_at")
+  wpConnectionId  String?   @map("wp_connection_id") // PlatformConnection ID
+
+  // SEO
+  seoTitle        String?   @map("seo_title")
+  seoDescription  String?   @map("seo_description")
+  seoKeywords     String?   @map("seo_keywords")
+
+  tags            String    @default("[]") // JSON array
+  categories      String    @default("[]") // JSON array
+
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, slug])
+  @@index([workspaceId, status])
+  @@map("workspace_posts")
+}
+
+model WorkspaceMenu {
+  id            String   @id @default(uuid())
+  workspaceId   String   @map("workspace_id")
+  name          String   // e.g., "Main Menu", "Footer Menu"
+  location      String   // HEADER, FOOTER, SIDEBAR
+  items         String   @default("[]") // JSON array of menu items
+  isActive      Boolean  @default(true) @map("is_active")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, location])
+  @@index([workspaceId])
+  @@map("workspace_menus")
 }

@@ -135,4 +135,21 @@ export const plansApi = {
     api.post('/payments/admin/create-razorpay-plan', { planId, billingCycle }),
 };
 
+// Workspaces API (Admin)
+export const workspacesApi = {
+  getAll: (params?: { page?: number; limit?: number; search?: string; isPublished?: boolean }) =>
+    api.get('/admin/workspaces', { params }),
+  getById: (id: string) => api.get(`/admin/workspaces/${id}`),
+  togglePublish: (id: string, isPublished: boolean) =>
+    api.put(`/admin/workspaces/${id}/publish`, { isPublished }),
+  delete: (id: string) => api.delete(`/admin/workspaces/${id}`),
+};
+
+// Credits API (Admin)
+export const creditsApi = {
+  getUtilization: (params?: { page?: number; limit?: number; tier?: string }) =>
+    api.get('/admin/credits/utilization', { params }),
+  getStats: () => api.get('/admin/credits/stats'),
+};
+
 export const apiClient = api;

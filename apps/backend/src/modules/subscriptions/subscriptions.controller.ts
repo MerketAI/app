@@ -30,6 +30,7 @@ import {
 } from './dto/subscription.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { Public } from '../../common/decorators/public.decorator';
 import Stripe from 'stripe';
 
 @ApiTags('subscriptions')
@@ -48,14 +49,12 @@ export class SubscriptionsController {
   }
 
   @Get('plans')
-  @ApiOperation({ summary: 'Get available subscription plans' })
-  getPlans() {
+  @Public()
+  @ApiOperation({ summary: 'Get available subscription plans (public)' })
+  async getPlans() {
+    const plans = await this.subscriptionsService.getPublicPlans();
     return {
-      plans: Object.entries(TIER_CREDITS).map(([tier, credits]) => ({
-        tier,
-        credits,
-        prices: TIER_PRICES[tier as keyof typeof TIER_PRICES],
-      })),
+      plans,
       creditCosts: CREDIT_COSTS,
     };
   }

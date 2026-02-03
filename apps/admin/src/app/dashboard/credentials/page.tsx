@@ -32,6 +32,8 @@ interface Credential {
 
 const CREDENTIAL_CATEGORIES = [
   { id: 'jasper', name: 'Jasper AI', icon: '🤖' },
+  { id: 'anthropic', name: 'Anthropic (Claude AI)', icon: '🧠' },
+  { id: 'aws', name: 'AWS (S3 Storage)', icon: '☁️' },
   { id: 'meta', name: 'Meta (Facebook/Instagram)', icon: '📱' },
   { id: 'google', name: 'Google', icon: '🔍' },
   { id: 'razorpay', name: 'Razorpay', icon: '💳' },
@@ -42,6 +44,15 @@ const PREDEFINED_KEYS = {
   jasper: [
     { key: 'JASPER_API_KEY', description: 'Jasper AI API Key' },
     { key: 'JASPER_API_URL', description: 'Jasper AI API URL (optional)' },
+  ],
+  anthropic: [
+    { key: 'ANTHROPIC_API_KEY', description: 'Anthropic API Key for Claude AI page generation' },
+  ],
+  aws: [
+    { key: 'AWS_ACCESS_KEY_ID', description: 'AWS Access Key ID for S3 uploads' },
+    { key: 'AWS_SECRET_ACCESS_KEY', description: 'AWS Secret Access Key' },
+    { key: 'AWS_S3_BUCKET', description: 'AWS S3 Bucket name (e.g., my-bucket)' },
+    { key: 'AWS_S3_REGION', description: 'AWS S3 Region (e.g., ap-south-1)' },
   ],
   meta: [
     { key: 'META_APP_ID', description: 'Meta App ID' },

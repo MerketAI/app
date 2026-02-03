@@ -566,19 +566,330 @@ export class AdminService {
     return { message: 'Plan deleted successfully' };
   }
 
+  // =====================
+  // Workspace Management
+  // =====================
+
+  async getWorkspaces(query: { page?: number; limit?: number; search?: string; isPublished?: boolean }) {
+    const { page = 1, limit = 20, search, isPublished } = query;
+    const skip = (page - 1) * limit;
+
+    const where: any = {};
+
+    if (search) {
+      where.OR = [
+        { name: { contains: search } },
+        { slug: { contains: search } },
+        { description: { contains: search } },
+      ];
+    }
+
+    if (isPublished !== undefined) {
+      where.isPublished = isPublished;
+    }
+
+    const [workspaces, total] = await Promise.all([
+      this.prisma.workspace.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          user: {
+            select: {
+              id: true,
+              email: true,
+              name: true,
+              status: true,
+              subscription: {
+                select: {
+                  tier: true,
+                  status: true,
+                },
+              },
+            },
+          },
+          _count: {
+            select: {
+              pages: true,
+              posts: true,
+              menus: true,
+            },
+          },
+        },
+      }),
+      this.prisma.workspace.count({ where }),
+    ]);
+
+    return {
+      workspaces: workspaces.map((ws) => ({
+        ...ws,
+        settings: ws.settings ? JSON.parse(ws.settings) : {},
+        url: `${ws.slug}.jeeper.app`,
+      })),
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  async getWorkspaceById(workspaceId: string) {
+    const workspace = await this.prisma.workspace.findUnique({
+      where: { id: workspaceId },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            status: true,
+            createdAt: true,
+            subscription: true,
+          },
+        },
+        pages: {
+          select: {
+            id: true,
+            title: true,
+            slug: true,
+            status: true,
+            isHomePage: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+          orderBy: { sortOrder: 'asc' },
+        },
+        posts: {
+          select: {
+            id: true,
+            title: true,
+            slug: true,
+            status: true,
+            createdAt: true,
+            publishedAt: true,
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 10,
+        },
+        menus: {
+          select: {
+            id: true,
+            name: true,
+            location: true,
+            isActive: true,
+          },
+        },
+      },
+    });
+
+    if (!workspace) {
+      throw new NotFoundException('Workspace not found');
+    }
+
+    return {
+      ...workspace,
+      settings: workspace.settings ? JSON.parse(workspace.settings) : {},
+      url: `${workspace.slug}.jeeper.app`,
+    };
+  }
+
+  async toggleWorkspacePublish(workspaceId: string, isPublished: boolean) {
+    const workspace = await this.prisma.workspace.findUnique({
+      where: { id: workspaceId },
+    });
+
+    if (!workspace) {
+      throw new NotFoundException('Workspace not found');
+    }
+
+    return this.prisma.workspace.update({
+      where: { id: workspaceId },
+      data: { isPublished },
+    });
+  }
+
+  async deleteWorkspace(workspaceId: string) {
+    const workspace = await this.prisma.workspace.findUnique({
+      where: { id: workspaceId },
+    });
+
+    if (!workspace) {
+      throw new NotFoundException('Workspace not found');
+    }
+
+    await this.prisma.workspace.delete({
+      where: { id: workspaceId },
+    });
+
+    return { message: 'Workspace deleted successfully' };
+  }
+
+  // =====================
+  // Credit Utilization
+  // =====================
+
+  async getCreditUtilization(query: { page?: number; limit?: number; tier?: string }) {
+    const { page = 1, limit = 20, tier } = query;
+    const skip = (page - 1) * limit;
+
+    const where: any = {};
+    if (tier) {
+      where.tier = tier;
+    }
+
+    const [subscriptions, total] = await Promise.all([
+      this.prisma.subscription.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { creditsRemaining: 'asc' }, // Show lowest credits first
+        include: {
+          user: {
+            select: {
+              id: true,
+              email: true,
+              name: true,
+              status: true,
+            },
+          },
+        },
+      }),
+      this.prisma.subscription.count({ where }),
+    ]);
+
+    // Calculate utilization stats
+    const utilization = subscriptions.map((sub) => {
+      const used = sub.creditsTotal - sub.creditsRemaining;
+      const percentUsed = sub.creditsTotal > 0 ? (used / sub.creditsTotal) * 100 : 0;
+      return {
+        ...sub,
+        creditsUsed: used,
+        percentUsed: Math.round(percentUsed * 100) / 100,
+        status: percentUsed >= 90 ? 'critical' : percentUsed >= 70 ? 'warning' : 'healthy',
+      };
+    });
+
+    return {
+      subscriptions: utilization,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  async getCreditStats() {
+    const [
+      totalCreditsAllocated,
+      totalCreditsRemaining,
+      subscriptionsByTier,
+      lowCreditUsers,
+      recentTransactions,
+    ] = await Promise.all([
+      this.prisma.subscription.aggregate({
+        _sum: { creditsTotal: true },
+      }),
+      this.prisma.subscription.aggregate({
+        _sum: { creditsRemaining: true },
+      }),
+      this.prisma.subscription.groupBy({
+        by: ['tier'],
+        _count: true,
+        _sum: {
+          creditsTotal: true,
+          creditsRemaining: true,
+        },
+      }),
+      this.prisma.subscription.count({
+        where: {
+          creditsRemaining: {
+            lte: this.prisma.subscription.fields.creditsTotal,
+          },
+        },
+      }),
+      this.prisma.creditTransaction.findMany({
+        take: 10,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          user: {
+            select: {
+              id: true,
+              email: true,
+              name: true,
+            },
+          },
+        },
+      }),
+    ]);
+
+    // Get users with less than 10% credits remaining
+    const criticalUsers = await this.prisma.subscription.findMany({
+      where: {
+        creditsRemaining: { gt: 0 },
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+          },
+        },
+      },
+    });
+
+    const criticalCount = criticalUsers.filter(
+      (sub) => (sub.creditsRemaining / sub.creditsTotal) * 100 <= 10,
+    ).length;
+
+    const totalAllocated = totalCreditsAllocated._sum.creditsTotal || 0;
+    const totalRemaining = totalCreditsRemaining._sum.creditsRemaining || 0;
+    const totalUsed = totalAllocated - totalRemaining;
+    const overallUtilization = totalAllocated > 0 ? (totalUsed / totalAllocated) * 100 : 0;
+
+    return {
+      overview: {
+        totalCreditsAllocated: totalAllocated,
+        totalCreditsRemaining: totalRemaining,
+        totalCreditsUsed: totalUsed,
+        overallUtilization: Math.round(overallUtilization * 100) / 100,
+        criticalUsersCount: criticalCount,
+      },
+      byTier: subscriptionsByTier.map((tier) => {
+        const allocated = tier._sum.creditsTotal || 0;
+        const remaining = tier._sum.creditsRemaining || 0;
+        const used = allocated - remaining;
+        return {
+          tier: tier.tier,
+          count: tier._count,
+          creditsAllocated: allocated,
+          creditsRemaining: remaining,
+          creditsUsed: used,
+          utilization: allocated > 0 ? Math.round((used / allocated) * 100 * 100) / 100 : 0,
+        };
+      }),
+      recentTransactions,
+    };
+  }
+
   async seedDefaultPlans() {
     const defaultPlans = [
       {
         name: 'STARTER',
         displayName: 'Starter',
-        description: 'Perfect for individuals getting started',
-        monthlyPrice: 0,
-        yearlyPrice: 0,
-        yearlyDiscount: 0,
-        credits: 100,
+        description: 'Perfect for individuals and small teams getting started.',
+        monthlyPrice: 2900, // $29 in cents
+        yearlyPrice: 27840, // $278.40 (20% off from $348)
+        yearlyDiscount: 20,
+        credits: 1000,
         features: JSON.stringify([
-          '100 credits/month',
-          'Instagram & Facebook posting',
+          '1,000 AI credits/month',
+          '3 social accounts',
           'Basic analytics',
           'Email support',
         ]),
@@ -589,59 +900,42 @@ export class AdminService {
       {
         name: 'PROFESSIONAL',
         displayName: 'Professional',
-        description: 'Best for growing businesses',
-        monthlyPrice: 99900, // Rs 999
-        yearlyPrice: 959000, // Rs 9590 (20% off)
+        description: 'For growing teams that need more power and flexibility.',
+        monthlyPrice: 7900, // $79 in cents
+        yearlyPrice: 75840, // $758.40 (20% off from $948)
         yearlyDiscount: 20,
-        credits: 500,
+        credits: 5000,
         features: JSON.stringify([
-          '500 credits/month',
-          'All social platforms',
+          '5,000 AI credits/month',
+          '10 social accounts',
           'Advanced analytics',
           'Priority support',
-          'Content scheduling',
+          'Team collaboration',
+          'Custom templates',
         ]),
         isActive: true,
         isDefault: false,
         sortOrder: 1,
       },
       {
-        name: 'BUSINESS',
-        displayName: 'Business',
-        description: 'For teams and agencies',
-        monthlyPrice: 299900, // Rs 2999
-        yearlyPrice: 2879000, // Rs 28790 (20% off)
+        name: 'ENTERPRISE',
+        displayName: 'Enterprise',
+        description: 'For large organizations with advanced security needs.',
+        monthlyPrice: 19900, // $199 in cents
+        yearlyPrice: 191040, // $1910.40 (20% off from $2388)
         yearlyDiscount: 20,
-        credits: 2000,
+        credits: 50000,
         features: JSON.stringify([
-          '2000 credits/month',
-          'All Professional features',
-          'Team collaboration',
-          'Custom branding',
-          'API access',
+          'Unlimited AI credits',
+          'Unlimited accounts',
+          'Custom integrations',
+          'Dedicated success manager',
+          'SSO & advanced security',
+          'Custom AI training',
         ]),
         isActive: true,
         isDefault: false,
         sortOrder: 2,
-      },
-      {
-        name: 'ENTERPRISE',
-        displayName: 'Enterprise',
-        description: 'Custom solutions for large organizations',
-        monthlyPrice: 999900, // Rs 9999
-        yearlyPrice: 9599000, // Rs 95990 (20% off)
-        yearlyDiscount: 20,
-        credits: 10000,
-        features: JSON.stringify([
-          '10000 credits/month',
-          'All Business features',
-          'Dedicated support',
-          'Custom integrations',
-          'SLA guarantee',
-        ]),
-        isActive: true,
-        isDefault: false,
-        sortOrder: 3,
       },
     ];
 

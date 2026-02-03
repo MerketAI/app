@@ -48,6 +48,11 @@ export class CredentialsService implements OnModuleInit {
       { key: 'RAZORPAY_WEBHOOK_SECRET', category: 'razorpay', description: 'Razorpay Webhook Secret' },
       { key: 'WORDPRESS_CLIENT_ID', category: 'wordpress', description: 'WordPress OAuth Client ID' },
       { key: 'WORDPRESS_CLIENT_SECRET', category: 'wordpress', description: 'WordPress OAuth Client Secret' },
+      { key: 'ANTHROPIC_API_KEY', category: 'anthropic', description: 'Anthropic API key for Claude AI page generation' },
+      { key: 'AWS_ACCESS_KEY_ID', category: 'aws', description: 'AWS Access Key ID for S3 uploads' },
+      { key: 'AWS_SECRET_ACCESS_KEY', category: 'aws', description: 'AWS Secret Access Key for S3 uploads' },
+      { key: 'AWS_S3_BUCKET', category: 'aws', description: 'AWS S3 Bucket name for file uploads' },
+      { key: 'AWS_S3_REGION', category: 'aws', description: 'AWS S3 Region (e.g., ap-south-1)' },
     ];
 
     for (const cred of defaults) {

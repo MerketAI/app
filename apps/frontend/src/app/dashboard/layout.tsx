@@ -13,6 +13,11 @@ import {
   LogOut,
   CreditCard,
   User,
+  Globe,
+  FileCode,
+  Newspaper,
+  Menu,
+  Building2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -23,6 +28,17 @@ const navigation = [
   { name: 'Content', href: '/dashboard/content', icon: FileText },
   { name: 'Platforms', href: '/dashboard/platforms', icon: Share2 },
   { name: 'Analytics', href: '/dashboard/analytics', icon: BarChart3 },
+  { name: 'Business', href: '/dashboard/business', icon: Building2 },
+];
+
+const workspaceNavigation = [
+  { name: 'Workspace', href: '/dashboard/workspace', icon: Globe },
+  { name: 'Pages', href: '/dashboard/workspace/pages', icon: FileCode },
+  { name: 'Posts', href: '/dashboard/workspace/posts', icon: Newspaper },
+  { name: 'Menus', href: '/dashboard/workspace/menus', icon: Menu },
+];
+
+const settingsNavigation = [
   { name: 'Settings', href: '/dashboard/settings', icon: Settings },
 ];
 
@@ -68,9 +84,10 @@ export default function DashboardLayout({
             </Link>
           </div>
 
-          <nav className="flex-1 px-4 space-y-1">
+          <nav className="flex-1 px-4 space-y-1 overflow-y-auto">
+            {/* Main Navigation */}
             {navigation.map((item) => {
-              const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+              const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href + '/'));
               return (
                 <Link
                   key={item.name}
@@ -87,6 +104,53 @@ export default function DashboardLayout({
                 </Link>
               );
             })}
+
+            {/* Workspace Section */}
+            <div className="pt-4 mt-4 border-t">
+              <p className="px-4 text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
+                Website Builder
+              </p>
+              {workspaceNavigation.map((item) => {
+                const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+                return (
+                  <Link
+                    key={item.name}
+                    href={item.href}
+                    className={cn(
+                      'flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-colors',
+                      isActive
+                        ? 'bg-primary/10 text-primary'
+                        : 'text-gray-600 hover:bg-gray-100'
+                    )}
+                  >
+                    <item.icon className="w-5 h-5 mr-3" />
+                    {item.name}
+                  </Link>
+                );
+              })}
+            </div>
+
+            {/* Settings */}
+            <div className="pt-4 mt-4 border-t">
+              {settingsNavigation.map((item) => {
+                const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+                return (
+                  <Link
+                    key={item.name}
+                    href={item.href}
+                    className={cn(
+                      'flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-colors',
+                      isActive
+                        ? 'bg-primary/10 text-primary'
+                        : 'text-gray-600 hover:bg-gray-100'
+                    )}
+                  >
+                    <item.icon className="w-5 h-5 mr-3" />
+                    {item.name}
+                  </Link>
+                );
+              })}
+            </div>
           </nav>
 
           {/* Credits section */}

@@ -1,6 +1,6 @@
 # Jasper Marketing Automation Platform
 
-An intelligent agent-powered marketing workflow orchestration platform that leverages Jasper AI for content generation and automates publishing across multiple social media platforms.
+An intelligent agent-powered marketing workflow orchestration platform that leverages AI (Jasper AI and Anthropic Claude) for content generation, page building, and automates publishing across multiple social media platforms.
 
 ## Table of Contents
 
@@ -8,10 +8,12 @@ An intelligent agent-powered marketing workflow orchestration platform that leve
 - [Architecture](#architecture)
 - [Tech Stack](#tech-stack)
 - [Project Structure](#project-structure)
+- [Frontend UI Components](#frontend-ui-components)
 - [Getting Started](#getting-started)
+- [Functional Flows](#functional-flows)
 - [Development Guidelines](#development-guidelines)
 - [API Documentation](#api-documentation)
-- [Database](#database)
+- [Database Schema](#database-schema)
 - [Authentication](#authentication)
 - [Payment Integration](#payment-integration)
 - [DevOps & Deployment](#devops--deployment)
@@ -25,7 +27,10 @@ An intelligent agent-powered marketing workflow orchestration platform that leve
 Jasper Marketing Automation Platform is a comprehensive solution for:
 
 - **AI-Powered Content Generation**: Leverage Jasper AI to create marketing content for social media, blogs, and more
+- **AI Page Builder**: Generate complete web pages using Anthropic Claude AI
 - **Multi-Platform Publishing**: Connect and publish to Instagram, Facebook, YouTube, WordPress, and LinkedIn
+- **Workspace & Site Builder**: Create custom websites with drag-and-drop page builder
+- **Blog Management**: Create and manage blog posts with WordPress sync
 - **Subscription Management**: Flexible subscription plans with credit-based usage and recurring payments
 - **Analytics Dashboard**: Track content performance across platforms
 - **Admin Panel**: Manage users, subscription plans, API credentials, and payments
@@ -48,53 +53,135 @@ Jasper Marketing Automation Platform is a comprehensive solution for:
                   │   (Next.js)   │           │   (Next.js)   │           │   (NestJS)    │
                   │   Port 3000   │           │   Port 3001   │           │   Port 3002   │
                   └───────────────┘           └───────────────┘           └───────────────┘
-                                                                                  │
-                                    ┌─────────────────────────────────────────────┼─────────────────────────────┐
-                                    │                                             │                             │
-                                    ▼                                             ▼                             ▼
-                            ┌───────────────┐                            ┌───────────────┐           ┌───────────────┐
-                            │   Database    │                            │    Redis      │           │  External APIs │
-                            │   (SQLite/    │                            │   (Cache)     │           │  - Jasper AI   │
-                            │   PostgreSQL) │                            │               │           │  - Meta API    │
-                            └───────────────┘                            └───────────────┘           │  - Google API  │
-                                                                                                     │  - Razorpay    │
-                                                                                                     └───────────────┘
+                         │                           │                           │
+                         │         REST API Calls    │                           │
+                         └───────────────────────────┼───────────────────────────┘
+                                                     │
+                    ┌────────────────────────────────┼────────────────────────────────┐
+                    │                                │                                │
+                    ▼                                ▼                                ▼
+            ┌───────────────┐               ┌───────────────┐              ┌───────────────┐
+            │   Database    │               │    Redis      │              │ External APIs │
+            │   (SQLite/    │               │   (Cache)     │              │               │
+            │   PostgreSQL) │               │   Optional    │              │ - Jasper AI   │
+            └───────────────┘               └───────────────┘              │ - Anthropic   │
+                                                                           │ - Meta API    │
+                                                                           │ - Google API  │
+                                                                           │ - Razorpay    │
+                                                                           │ - WordPress   │
+                                                                           └───────────────┘
+```
+
+### App Communication Flow
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│                              USER JOURNEY                                            │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│  Frontend   │────▶│   Backend   │────▶│  Database   │     │   Admin     │
+│  (Next.js)  │◀────│  (NestJS)   │◀────│  (Prisma)   │     │  (Next.js)  │
+│  Port 3000  │     │  Port 3002  │     │   SQLite    │     │  Port 3001  │
+└─────────────┘     └─────────────┘     └─────────────┘     └──────┬──────┘
+      │                    │                                        │
+      │                    │                                        │
+      │    ┌───────────────┴───────────────┐                       │
+      │    │     API Endpoints Used        │                       │
+      │    │                               │                       │
+      │    │  /auth/*     - Authentication │                       │
+      │    │  /users/*    - User Profile   │                       │
+      │    │  /content/*  - Content CRUD   │◀──────────────────────┘
+      │    │  /workspace/*- Page Builder   │     Admin uses same API
+      │    │  /payments/* - Subscriptions  │     with ADMIN role
+      │    │  /platforms/*- Social Connect │
+      │    │  /admin/*    - Admin Only     │
+      │    └───────────────────────────────┘
+      │
+      │    ┌───────────────────────────────┐
+      │    │   External API Integrations   │
+      │    │                               │
+      └───▶│  Razorpay   - Payment UI      │
+           │  Google     - OAuth Redirect  │
+           │  Meta       - OAuth Redirect  │
+           └───────────────────────────────┘
 ```
 
 ---
 
 ## Tech Stack
 
-### Backend
-| Technology | Version | Purpose |
-|------------|---------|---------|
-| Node.js | >= 18.0.0 | Runtime |
-| NestJS | 10.x | API Framework |
-| Prisma | 5.x | ORM |
-| SQLite/PostgreSQL | - | Database |
-| Redis | - | Caching (optional) |
-| Passport.js | 0.7.x | Authentication |
-| JWT | - | Token-based auth |
+### Backend (NestJS)
 
-### Frontend & Admin
-| Technology | Version | Purpose |
-|------------|---------|---------|
-| Next.js | 14.x | React Framework |
-| React | 18.x | UI Library |
-| TypeScript | 5.x | Type Safety |
-| Tailwind CSS | 3.x | Styling |
-| Zustand | 4.x | State Management |
-| React Query | 5.x | Data Fetching |
-| Radix UI | - | UI Components |
+| Package | Version | Purpose |
+|---------|---------|---------|
+| @nestjs/core | 10.x | Core framework |
+| @nestjs/platform-express | 10.x | HTTP server |
+| @nestjs/passport | 10.x | Authentication |
+| @nestjs/jwt | 10.x | JWT tokens |
+| @nestjs/swagger | 7.x | API documentation |
+| @nestjs/config | 3.x | Configuration |
+| @nestjs/throttler | 5.x | Rate limiting |
+| @prisma/client | 5.x | Database ORM |
+| passport-jwt | 4.x | JWT strategy |
+| passport-google-oauth20 | 2.x | Google OAuth |
+| bcryptjs | 2.x | Password hashing |
+| helmet | 7.x | Security headers |
+| razorpay | 2.x | Payment integration |
+| axios | 1.x | HTTP client |
+| class-validator | 0.14.x | DTO validation |
+| class-transformer | 0.5.x | Object transformation |
+
+### Frontend & Admin (Next.js)
+
+| Package | Version | Purpose |
+|---------|---------|---------|
+| next | 14.1.x | React framework |
+| react | 18.x | UI library |
+| typescript | 5.x | Type safety |
+| tailwindcss | 3.4.x | Utility CSS |
+| tailwindcss-animate | 1.x | Animations |
+| @tanstack/react-query | 5.x | Server state |
+| zustand | 4.x | Client state |
+| axios | 1.x | HTTP client |
+| react-hook-form | 7.x | Form handling |
+| @hookform/resolvers | 3.x | Form validation |
+| zod | 3.x | Schema validation |
+| date-fns | 3.x | Date utilities |
+| recharts | 2.x | Charts |
+| lucide-react | 0.309.x | Icons |
+| sonner | 1.4.x | Toast notifications |
+| class-variance-authority | 0.7.x | Component variants |
+| clsx | 2.x | Class utilities |
+| tailwind-merge | 2.x | Tailwind merging |
+
+### Radix UI Components (Frontend)
+
+| Package | Version | Purpose |
+|---------|---------|---------|
+| @radix-ui/react-alert-dialog | 1.x | Alert dialogs |
+| @radix-ui/react-avatar | 1.x | User avatars |
+| @radix-ui/react-dialog | 1.x | Modal dialogs |
+| @radix-ui/react-dropdown-menu | 2.x | Dropdown menus |
+| @radix-ui/react-label | 2.x | Form labels |
+| @radix-ui/react-select | 2.x | Select dropdowns |
+| @radix-ui/react-separator | 1.x | Visual separators |
+| @radix-ui/react-slot | 1.x | Slot component |
+| @radix-ui/react-switch | 1.x | Toggle switches |
+| @radix-ui/react-tabs | 1.x | Tab navigation |
+| @radix-ui/react-toast | 1.x | Toast messages |
 
 ### External Services
+
 | Service | Purpose |
 |---------|---------|
-| Jasper AI | Content Generation |
-| Meta API | Facebook/Instagram Publishing |
-| Google API | YouTube/OAuth |
-| Razorpay | Payment Processing (India) |
-| Stripe | Payment Processing (Global) |
+| Jasper AI | Content generation (social posts, blogs) |
+| Anthropic Claude | AI page generation for workspace |
+| Meta API | Facebook/Instagram publishing |
+| Google API | YouTube/OAuth authentication |
+| WordPress API | Blog publishing and sync |
+| Razorpay | Payment processing (India) |
+| Stripe | Payment processing (Global) - Optional |
 
 ---
 
@@ -103,67 +190,173 @@ Jasper Marketing Automation Platform is a comprehensive solution for:
 ```
 jasper/
 ├── apps/
-│   ├── backend/                 # NestJS API Server
+│   ├── backend/                    # NestJS API Server (Port 3002)
 │   │   ├── prisma/
-│   │   │   ├── schema.prisma    # Database schema
-│   │   │   ├── migrations/      # Database migrations
-│   │   │   └── dev.db           # SQLite database (dev)
+│   │   │   ├── schema.prisma       # Database schema (444 lines)
+│   │   │   ├── migrations/         # 4 migration folders
+│   │   │   │   ├── 20260201183323_init/
+│   │   │   │   ├── 20260201192951_add_admin_credentials_payments/
+│   │   │   │   ├── 20260201201629_add_subscription_plans/
+│   │   │   │   └── 20260201213602_add_workspace_page_builder/
+│   │   │   └── dev.db              # SQLite database (development)
 │   │   ├── src/
-│   │   │   ├── common/          # Shared utilities
-│   │   │   │   ├── decorators/  # Custom decorators
-│   │   │   │   ├── filters/     # Exception filters
-│   │   │   │   ├── guards/      # Auth guards (JwtAuthGuard, AdminGuard)
-│   │   │   │   └── interceptors/# Request interceptors
+│   │   │   ├── common/
+│   │   │   │   ├── decorators/
+│   │   │   │   │   ├── current-user.decorator.ts
+│   │   │   │   │   └── public.decorator.ts
+│   │   │   │   ├── filters/        # Exception handling
+│   │   │   │   ├── guards/
+│   │   │   │   │   └── admin.guard.ts
+│   │   │   │   └── interceptors/   # Request/response transformation
 │   │   │   ├── modules/
-│   │   │   │   ├── admin/       # Admin management (users, plans, audit)
-│   │   │   │   ├── analytics/   # Analytics module
-│   │   │   │   ├── auth/        # Authentication (JWT, OAuth)
-│   │   │   │   ├── content/     # Content management
-│   │   │   │   ├── credentials/ # Encrypted API credentials
-│   │   │   │   ├── health/      # Health checks
-│   │   │   │   ├── jasper/      # Jasper AI integration
-│   │   │   │   ├── platforms/   # Social platform connections
-│   │   │   │   ├── publishing/  # Content publishing
-│   │   │   │   ├── razorpay/    # Razorpay payments & subscriptions
-│   │   │   │   ├── subscriptions/# Subscription management
-│   │   │   │   └── users/       # User management
-│   │   │   ├── prisma/          # Prisma service
-│   │   │   ├── app.module.ts    # Root module
-│   │   │   └── main.ts          # Entry point
-│   │   ├── .env                 # Environment variables
+│   │   │   │   ├── admin/          # Admin dashboard & user management
+│   │   │   │   ├── analytics/      # Content analytics
+│   │   │   │   ├── auth/           # JWT, OAuth, registration
+│   │   │   │   ├── content/        # AI content generation & CRUD
+│   │   │   │   ├── credentials/    # Encrypted API key storage
+│   │   │   │   ├── health/         # Health check endpoints
+│   │   │   │   ├── jasper/         # Jasper AI integration
+│   │   │   │   ├── platforms/      # Social platform OAuth & connections
+│   │   │   │   ├── publishing/     # Multi-platform publishing
+│   │   │   │   ├── razorpay/       # Payment processing
+│   │   │   │   ├── subscriptions/  # Plans & credit management
+│   │   │   │   ├── users/          # User profile management
+│   │   │   │   └── workspace/      # Page builder module
+│   │   │   │       ├── workspace.controller.ts
+│   │   │   │       ├── workspace.service.ts
+│   │   │   │       ├── pages.service.ts
+│   │   │   │       ├── posts.service.ts
+│   │   │   │       ├── menus.service.ts
+│   │   │   │       ├── ai-page.service.ts  # Claude AI integration
+│   │   │   │       └── dto/
+│   │   │   ├── prisma/
+│   │   │   │   └── prisma.service.ts
+│   │   │   ├── app.module.ts       # Root module
+│   │   │   └── main.ts             # Bootstrap
+│   │   ├── .env                    # Environment variables
 │   │   └── package.json
 │   │
-│   ├── frontend/                # User-facing Next.js App (Port 3000)
+│   ├── frontend/                   # User Dashboard (Port 3000)
 │   │   ├── src/
-│   │   │   ├── app/             # App Router pages
-│   │   │   ├── components/      # React components
-│   │   │   ├── hooks/           # Custom hooks
-│   │   │   ├── lib/             # Utilities & API client
-│   │   │   └── store/           # Zustand stores
+│   │   │   ├── app/
+│   │   │   │   ├── page.tsx                      # Landing page
+│   │   │   │   ├── layout.tsx                    # Root layout
+│   │   │   │   ├── globals.css                   # Global styles
+│   │   │   │   ├── (auth)/
+│   │   │   │   │   ├── login/page.tsx
+│   │   │   │   │   └── register/page.tsx
+│   │   │   │   └── dashboard/
+│   │   │   │       ├── layout.tsx                # Dashboard layout
+│   │   │   │       ├── page.tsx                  # Dashboard home
+│   │   │   │       ├── content/
+│   │   │   │       │   ├── page.tsx              # Content list
+│   │   │   │       │   └── create/page.tsx       # Create content
+│   │   │   │       ├── platforms/page.tsx        # Connected platforms
+│   │   │   │       ├── analytics/page.tsx        # Analytics
+│   │   │   │       ├── settings/page.tsx         # User settings
+│   │   │   │       └── workspace/                # Page Builder
+│   │   │   │           ├── page.tsx              # Workspace settings
+│   │   │   │           ├── pages/
+│   │   │   │           │   ├── page.tsx          # Pages list
+│   │   │   │           │   ├── new/page.tsx      # Create page
+│   │   │   │           │   └── [id]/edit/page.tsx
+│   │   │   │           ├── posts/
+│   │   │   │           │   ├── page.tsx          # Blog posts list
+│   │   │   │           │   ├── new/page.tsx      # Create post
+│   │   │   │           │   └── [id]/edit/page.tsx
+│   │   │   │           └── menus/page.tsx        # Menu management
+│   │   │   ├── components/
+│   │   │   │   ├── landing/
+│   │   │   │   │   ├── navbar.tsx
+│   │   │   │   │   └── footer.tsx
+│   │   │   │   ├── providers.tsx                 # React Query + Toasters
+│   │   │   │   └── ui/                           # shadcn/ui components
+│   │   │   │       ├── alert-dialog.tsx
+│   │   │   │       ├── badge.tsx
+│   │   │   │       ├── button.tsx
+│   │   │   │       ├── card.tsx
+│   │   │   │       ├── dialog.tsx
+│   │   │   │       ├── dropdown-menu.tsx
+│   │   │   │       ├── input.tsx
+│   │   │   │       ├── label.tsx
+│   │   │   │       ├── select.tsx
+│   │   │   │       ├── sheet.tsx
+│   │   │   │       ├── switch.tsx
+│   │   │   │       ├── tabs.tsx
+│   │   │   │       ├── textarea.tsx
+│   │   │   │       ├── toast.tsx
+│   │   │   │       └── toaster.tsx
+│   │   │   ├── hooks/                            # Custom React hooks
+│   │   │   ├── lib/
+│   │   │   │   ├── api.ts                        # Axios API client
+│   │   │   │   └── utils.ts                      # Utility functions
+│   │   │   └── store/                            # Zustand stores
+│   │   ├── tailwind.config.ts
 │   │   └── package.json
 │   │
-│   └── admin/                   # Admin Panel Next.js App (Port 3001)
+│   └── admin/                      # Admin Panel (Port 3001)
 │       ├── src/
 │       │   ├── app/
-│       │   │   ├── dashboard/   # Admin dashboard
-│       │   │   │   ├── page.tsx          # Dashboard stats
-│       │   │   │   ├── users/page.tsx    # User management
-│       │   │   │   ├── plans/page.tsx    # Subscription plans
-│       │   │   │   ├── credentials/page.tsx # API credentials
-│       │   │   │   └── payments/page.tsx # Payment history
-│       │   │   └── login/page.tsx        # Admin login
-│       │   ├── components/ui/   # UI components
-│       │   ├── lib/api.ts       # API client
-│       │   └── store/auth.ts    # Auth store
+│       │   │   ├── page.tsx                      # Redirect to dashboard
+│       │   │   ├── layout.tsx
+│       │   │   ├── login/page.tsx                # Admin login
+│       │   │   └── dashboard/
+│       │   │       ├── layout.tsx
+│       │   │       ├── page.tsx                  # Stats dashboard
+│       │   │       ├── users/page.tsx            # User management
+│       │   │       ├── plans/page.tsx            # Subscription plans
+│       │   │       ├── credentials/page.tsx      # API credentials
+│       │   │       └── payments/page.tsx         # Payment history
+│       │   ├── components/ui/                    # Admin UI components
+│       │   ├── lib/
+│       │   │   ├── api.ts                        # Admin API client
+│       │   │   └── utils.ts
+│       │   └── store/
+│       │       └── auth.ts                       # Admin auth store
 │       └── package.json
 │
-├── packages/                    # Shared packages (future)
+├── packages/                       # Shared packages (future)
 │   └── shared/
 │
-├── package.json                 # Root package.json (workspaces)
-├── kill-ports.ps1              # Windows port cleanup script
-└── README.md                    # This file
+├── package.json                    # Root workspace configuration
+├── package-lock.json               # Dependency lock file
+├── kill-ports.ps1                  # Windows port cleanup script
+└── README.md                       # This file
 ```
+
+---
+
+## Frontend UI Components
+
+The frontend uses **shadcn/ui** components built on Radix UI primitives with Tailwind CSS styling.
+
+### Available Components (`apps/frontend/src/components/ui/`)
+
+| Component | File | Radix Dependency | Purpose |
+|-----------|------|------------------|---------|
+| AlertDialog | `alert-dialog.tsx` | `@radix-ui/react-alert-dialog` | Confirmation dialogs |
+| Badge | `badge.tsx` | None (pure CSS) | Status indicators |
+| Button | `button.tsx` | `@radix-ui/react-slot` | Action buttons with variants |
+| Card | `card.tsx` | None (pure CSS) | Content containers |
+| Dialog | `dialog.tsx` | `@radix-ui/react-dialog` | Modal dialogs |
+| DropdownMenu | `dropdown-menu.tsx` | `@radix-ui/react-dropdown-menu` | Context menus |
+| Input | `input.tsx` | None (pure CSS) | Text inputs |
+| Label | `label.tsx` | `@radix-ui/react-label` | Form labels |
+| Select | `select.tsx` | `@radix-ui/react-select` | Dropdown selects |
+| Sheet | `sheet.tsx` | `@radix-ui/react-dialog` | Slide-out panels |
+| Switch | `switch.tsx` | `@radix-ui/react-switch` | Toggle switches |
+| Tabs | `tabs.tsx` | `@radix-ui/react-tabs` | Tab navigation |
+| Textarea | `textarea.tsx` | None (pure CSS) | Multi-line inputs |
+| Toast | `toast.tsx` | `@radix-ui/react-toast` | Notifications (custom) |
+| Toaster | `toaster.tsx` | - | Toast container |
+
+### Toast Systems
+
+The app uses **two toast systems**:
+1. **Custom Toast** (`@/components/ui/toast`) - For React Query integration
+2. **Sonner** (`sonner`) - For simple toast notifications in workspace pages
+
+Both are initialized in `providers.tsx`.
 
 ---
 
@@ -179,11 +372,11 @@ jasper/
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/your-org/jasper-marketing-automation.git
-   cd jasper-marketing-automation
+   git clone https://github.com/your-org/jasper.git
+   cd jasper
    ```
 
-2. **Install dependencies**
+2. **Install all dependencies**
    ```bash
    npm install
    ```
@@ -193,7 +386,7 @@ jasper/
    # Copy example env file
    cp apps/backend/.env.example apps/backend/.env
 
-   # Edit with your values (see Environment Variables section)
+   # Edit with your values
    ```
 
 4. **Initialize the database**
@@ -207,7 +400,7 @@ jasper/
 
 5. **Start development servers**
    ```bash
-   # Start all apps (backend, frontend, admin)
+   # Start all apps simultaneously
    npm run dev:all
 
    # Or start individually
@@ -218,27 +411,203 @@ jasper/
 
 ### First-Time Setup
 
-1. **Create an admin user**
-   ```bash
-   # Open Prisma Studio
-   npm run db:studio
+1. **Register a user** at `http://localhost:3000/register`
 
-   # Find your user and update role to 'ADMIN'
-   # Or use the API to register, then update via Studio
+2. **Promote to admin**
+   ```bash
+   npm run db:studio
+   # Find your user → Change role to 'ADMIN'
    ```
 
-2. **Seed default subscription plans**
-   - Login to admin panel at `http://localhost:3001`
-   - Navigate to **Plans** page
-   - Click **"Seed Default Plans"** button
+3. **Seed subscription plans**
+   - Login to admin at `http://localhost:3001`
+   - Go to **Plans** → Click **"Seed Default Plans"**
 
-3. **Configure API credentials**
-   - Go to **Credentials** page in admin
-   - Add required API keys:
-     - Jasper AI: `JASPER_API_KEY`
-     - Meta: `META_APP_ID`, `META_APP_SECRET`
-     - Google: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`
-     - Razorpay: `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`
+4. **Configure API credentials**
+   - Go to **Credentials** in admin panel
+   - Add keys for services you want to use:
+     - **Jasper AI**: `JASPER_API_KEY`
+     - **Anthropic**: `ANTHROPIC_API_KEY`
+     - **Meta**: `META_APP_ID`, `META_APP_SECRET`
+     - **Google**: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`
+     - **Razorpay**: `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`
+
+### NPM Scripts Reference
+
+| Script | Description |
+|--------|-------------|
+| `npm run dev` | Start frontend + backend |
+| `npm run dev:all` | Start all 3 apps |
+| `npm run dev:backend` | Start backend only |
+| `npm run dev:frontend` | Start frontend only |
+| `npm run dev:admin` | Start admin only |
+| `npm run build` | Build all apps |
+| `npm run db:generate` | Generate Prisma client |
+| `npm run db:migrate` | Run database migrations |
+| `npm run db:studio` | Open Prisma Studio (port 5555) |
+| `npm run lint` | Lint all apps |
+
+---
+
+## Functional Flows
+
+### 1. User Authentication Flow
+
+```
+┌──────────────┐     ┌──────────────┐     ┌──────────────┐
+│   Frontend   │     │   Backend    │     │   Database   │
+│  /register   │     │  /auth/*     │     │    User      │
+└──────┬───────┘     └──────┬───────┘     └──────┬───────┘
+       │                    │                    │
+       │  POST /register    │                    │
+       │───────────────────▶│                    │
+       │                    │  Create user       │
+       │                    │───────────────────▶│
+       │                    │                    │
+       │                    │  Create subscription (STARTER, 100 credits)
+       │                    │───────────────────▶│
+       │                    │                    │
+       │  { user, tokens }  │                    │
+       │◀───────────────────│                    │
+       │                    │                    │
+       │  Store in localStorage                  │
+       │  Redirect to /dashboard                 │
+```
+
+### 2. Content Generation Flow
+
+```
+┌──────────────┐     ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
+│   Frontend   │     │   Backend    │     │  Jasper AI   │     │   Database   │
+│  /content    │     │  /content/*  │     │     API      │     │   Content    │
+└──────┬───────┘     └──────┬───────┘     └──────┬───────┘     └──────┬───────┘
+       │                    │                    │                    │
+       │  POST /generate    │                    │                    │
+       │  { type, topic }   │                    │                    │
+       │───────────────────▶│                    │                    │
+       │                    │                    │                    │
+       │                    │  Check credits     │                    │
+       │                    │───────────────────────────────────────▶│
+       │                    │                    │                    │
+       │                    │  Call Jasper API   │                    │
+       │                    │───────────────────▶│                    │
+       │                    │                    │                    │
+       │                    │  Generated content │                    │
+       │                    │◀───────────────────│                    │
+       │                    │                    │                    │
+       │                    │  Save content      │                    │
+       │                    │───────────────────────────────────────▶│
+       │                    │                    │                    │
+       │                    │  Deduct credits    │                    │
+       │                    │───────────────────────────────────────▶│
+       │                    │                    │                    │
+       │  { content }       │                    │                    │
+       │◀───────────────────│                    │                    │
+```
+
+### 3. Payment & Subscription Flow
+
+```
+┌──────────────┐     ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
+│   Frontend   │     │   Backend    │     │  Razorpay    │     │   Database   │
+│  Pricing     │     │  /payments/* │     │    API       │     │  Payment     │
+└──────┬───────┘     └──────┬───────┘     └──────┬───────┘     └──────┬───────┘
+       │                    │                    │                    │
+       │  POST /create-order│                    │                    │
+       │───────────────────▶│                    │                    │
+       │                    │  Create order      │                    │
+       │                    │───────────────────▶│                    │
+       │                    │                    │                    │
+       │  { orderId, key }  │                    │                    │
+       │◀───────────────────│                    │                    │
+       │                    │                    │                    │
+       │  Open Razorpay     │                    │                    │
+       │  Checkout Widget   │                    │                    │
+       │─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─▶│                    │
+       │                    │                    │                    │
+       │  Payment complete  │                    │                    │
+       │◀─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─│                    │
+       │                    │                    │                    │
+       │  POST /verify      │                    │                    │
+       │───────────────────▶│                    │                    │
+       │                    │  Verify signature  │                    │
+       │                    │───────────────────▶│                    │
+       │                    │                    │                    │
+       │                    │  Update subscription                   │
+       │                    │───────────────────────────────────────▶│
+       │                    │                    │                    │
+       │                    │  Add credits       │                    │
+       │                    │───────────────────────────────────────▶│
+       │                    │                    │                    │
+       │  { success }       │                    │                    │
+       │◀───────────────────│                    │                    │
+```
+
+### 4. Workspace/Page Builder Flow
+
+```
+┌──────────────┐     ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
+│   Frontend   │     │   Backend    │     │  Anthropic   │     │   Database   │
+│  /workspace  │     │  /workspace/*│     │  Claude API  │     │  Workspace   │
+└──────┬───────┘     └──────┬───────┘     └──────┬───────┘     └──────┬───────┘
+       │                    │                    │                    │
+       │  POST /workspace   │                    │                    │
+       │  { name, slug }    │                    │                    │
+       │───────────────────▶│                    │                    │
+       │                    │  Create workspace  │                    │
+       │                    │───────────────────────────────────────▶│
+       │                    │                    │                    │
+       │  POST /pages       │                    │                    │
+       │───────────────────▶│                    │                    │
+       │                    │  Create page       │                    │
+       │                    │───────────────────────────────────────▶│
+       │                    │                    │                    │
+       │  POST /pages/:id/  │                    │                    │
+       │  generate-with-ai  │                    │                    │
+       │───────────────────▶│                    │                    │
+       │                    │  Generate HTML     │                    │
+       │                    │───────────────────▶│                    │
+       │                    │                    │                    │
+       │                    │  Claude response   │                    │
+       │                    │◀───────────────────│                    │
+       │                    │                    │                    │
+       │                    │  Save HTML content │                    │
+       │                    │───────────────────────────────────────▶│
+       │                    │                    │                    │
+       │  { page with HTML }│                    │                    │
+       │◀───────────────────│                    │                    │
+```
+
+### 5. Admin Management Flow
+
+```
+┌──────────────┐     ┌──────────────┐     ┌──────────────┐
+│    Admin     │     │   Backend    │     │   Database   │
+│  /dashboard  │     │  /admin/*    │     │   (All)      │
+└──────┬───────┘     └──────┬───────┘     └──────┬───────┘
+       │                    │                    │
+       │  GET /admin/stats  │                    │
+       │───────────────────▶│                    │
+       │                    │  Aggregate data    │
+       │                    │───────────────────▶│
+       │  { stats }         │                    │
+       │◀───────────────────│                    │
+       │                    │                    │
+       │  PUT /admin/users/:id                   │
+       │  { role: 'ADMIN' } │                    │
+       │───────────────────▶│                    │
+       │                    │  Update user       │
+       │                    │───────────────────▶│
+       │                    │                    │
+       │                    │  Create audit log  │
+       │                    │───────────────────▶│
+       │                    │                    │
+       │  PUT /admin/credentials/:key            │
+       │  { value: 'sk-xxx' }                    │
+       │───────────────────▶│                    │
+       │                    │  Encrypt & save    │
+       │                    │───────────────────▶│
+```
 
 ---
 
@@ -246,53 +615,19 @@ jasper/
 
 ### Code Style
 
-- **TypeScript**: Use strict mode, explicit types for function parameters and returns
-- **Naming Conventions**:
+- **TypeScript**: Strict mode, explicit types
+- **Naming**:
   - Variables/Functions: `camelCase`
-  - Classes/Interfaces/Types: `PascalCase`
-  - Files: `kebab-case.ts` or `kebab-case.service.ts`
-  - Database columns: `snake_case` (using Prisma `@map`)
-- **Imports**: Group by external, internal, relative
-- **Comments**: Use JSDoc for public APIs and complex logic
+  - Classes/Interfaces: `PascalCase`
+  - Files: `kebab-case.ts`
+  - Database columns: `snake_case` (via Prisma `@map`)
 
-### Git Workflow
-
-```bash
-# Create feature branch from main
-git checkout main
-git pull origin main
-git checkout -b feature/your-feature-name
-
-# Make changes and commit (use conventional commits)
-git add .
-git commit -m "feat: add your feature description"
-
-# Push and create PR
-git push origin feature/your-feature-name
-```
-
-### Commit Convention
-
-Follow [Conventional Commits](https://www.conventionalcommits.org/):
-
-| Type | Description | Example |
-|------|-------------|---------|
-| `feat` | New feature | `feat: add subscription plan management` |
-| `fix` | Bug fix | `fix: resolve payment verification issue` |
-| `docs` | Documentation | `docs: update API documentation` |
-| `style` | Formatting | `style: fix indentation in auth service` |
-| `refactor` | Code restructuring | `refactor: simplify credential encryption` |
-| `test` | Adding tests | `test: add unit tests for razorpay service` |
-| `chore` | Maintenance | `chore: update dependencies` |
-
-### Backend Development
-
-#### Adding a New Module
+### Adding a Backend Module
 
 ```bash
 cd apps/backend
 
-# Generate module, controller, and service
+# Generate module structure
 npx nest g module modules/your-module
 npx nest g controller modules/your-module
 npx nest g service modules/your-module
@@ -301,320 +636,341 @@ npx nest g service modules/your-module
 mkdir src/modules/your-module/dto
 ```
 
-#### Module Structure
-```
-modules/your-module/
-├── dto/
-│   └── your-module.dto.ts      # Request/Response DTOs
-├── your-module.controller.ts    # HTTP endpoints
-├── your-module.service.ts       # Business logic
-├── your-module.module.ts        # Module definition
-└── index.ts                     # Barrel exports
-```
+### Adding a Frontend Page
 
-#### Adding API Endpoints
-
-1. **Create DTOs** with validation decorators:
-   ```typescript
-   // dto/create-item.dto.ts
-   import { ApiProperty } from '@nestjs/swagger';
-   import { IsString, IsInt, Min } from 'class-validator';
-
-   export class CreateItemDto {
-     @ApiProperty({ example: 'Item Name' })
-     @IsString()
-     name: string;
-
-     @ApiProperty({ example: 100 })
-     @IsInt()
-     @Min(0)
-     price: number;
-   }
-   ```
-
-2. **Add service methods**:
-   ```typescript
-   // your-module.service.ts
-   @Injectable()
-   export class YourModuleService {
-     constructor(private prisma: PrismaService) {}
-
-     async create(dto: CreateItemDto) {
-       return this.prisma.item.create({ data: dto });
-     }
-   }
-   ```
-
-3. **Add controller routes** with Swagger decorators:
-   ```typescript
-   // your-module.controller.ts
-   @ApiTags('Items')
-   @Controller({ path: 'items', version: '1' })
-   export class YourModuleController {
-     @Post()
-     @UseGuards(JwtAuthGuard)
-     @ApiBearerAuth()
-     @ApiOperation({ summary: 'Create item' })
-     @ApiResponse({ status: 201, description: 'Item created' })
-     async create(@Body() dto: CreateItemDto) {
-       return this.service.create(dto);
-     }
-   }
-   ```
-
-#### Database Changes
-
-```bash
-# 1. Modify prisma/schema.prisma
-
-# 2. Create and apply migration
-npm run db:migrate
-
-# 3. Regenerate Prisma client
-npm run db:generate
-
-# 4. (Optional) View in Prisma Studio
-npm run db:studio
-```
-
-### Frontend Development
-
-#### Adding a New Page
-
-1. Create page file:
-   ```
-   src/app/your-route/page.tsx
-   ```
-
-2. Add API calls to `src/lib/api.ts`:
-   ```typescript
-   export const itemsApi = {
-     getAll: () => api.get('/items'),
-     create: (data: CreateItemDto) => api.post('/items', data),
-   };
-   ```
-
-3. Create page component:
-   ```typescript
-   'use client';
-
-   import { useQuery } from '@tanstack/react-query';
-   import { itemsApi } from '@/lib/api';
-
-   export default function ItemsPage() {
-     const { data, isLoading } = useQuery({
-       queryKey: ['items'],
-       queryFn: () => itemsApi.getAll(),
-     });
-
-     if (isLoading) return <div>Loading...</div>;
-
-     return <div>{/* Render items */}</div>;
-   }
-   ```
-
-#### State Management with Zustand
+1. Create page file: `src/app/your-route/page.tsx`
+2. Add API calls to `src/lib/api.ts`
+3. Use React Query for data fetching:
 
 ```typescript
-// src/store/items.ts
-import { create } from 'zustand';
+'use client';
 
-interface ItemsStore {
-  items: Item[];
-  selectedItem: Item | null;
-  setItems: (items: Item[]) => void;
-  selectItem: (item: Item) => void;
+import { useQuery } from '@tanstack/react-query';
+import { yourApi } from '@/lib/api';
+
+export default function YourPage() {
+  const { data, isLoading } = useQuery({
+    queryKey: ['your-key'],
+    queryFn: () => yourApi.getAll(),
+  });
+
+  if (isLoading) return <div>Loading...</div>;
+  return <div>{/* Render data */}</div>;
 }
-
-export const useItemsStore = create<ItemsStore>((set) => ({
-  items: [],
-  selectedItem: null,
-  setItems: (items) => set({ items }),
-  selectItem: (item) => set({ selectedItem: item }),
-}));
 ```
 
-### Testing
+### Adding UI Components
 
-```bash
-# Backend unit tests
-cd apps/backend
-npm run test
+Follow shadcn/ui pattern:
 
-# Backend E2E tests
-npm run test:e2e
+```typescript
+// components/ui/your-component.tsx
+import * as React from 'react';
+import { cn } from '@/lib/utils';
 
-# Test coverage
-npm run test:cov
+export interface YourComponentProps extends React.HTMLAttributes<HTMLDivElement> {}
 
-# Watch mode
-npm run test:watch
+const YourComponent = React.forwardRef<HTMLDivElement, YourComponentProps>(
+  ({ className, ...props }, ref) => (
+    <div ref={ref} className={cn('your-base-classes', className)} {...props} />
+  )
+);
+YourComponent.displayName = 'YourComponent';
+
+export { YourComponent };
 ```
 
 ---
 
 ## API Documentation
 
-### Base URLs
+### Base URL
+
 | Environment | URL |
 |-------------|-----|
 | Development | `http://localhost:3002/api/v1` |
 | Production | `https://api.yourdomain.com/api/v1` |
 
 ### Swagger UI
-Access interactive API docs at: `http://localhost:3002/api/docs`
+
+Access at: `http://localhost:3002/api/docs`
 
 ### Authentication
 
-All protected endpoints require Bearer token:
 ```
 Authorization: Bearer <access_token>
 ```
 
 ### Core Endpoints
 
-#### Authentication
+#### Authentication (`/auth`)
 | Method | Endpoint | Description | Auth |
 |--------|----------|-------------|------|
 | POST | `/auth/register` | User registration | No |
 | POST | `/auth/login` | User login | No |
-| POST | `/auth/refresh` | Refresh access token | No |
-| POST | `/auth/logout` | Logout user | Yes |
-| GET | `/auth/me` | Get current user | Yes |
-| GET | `/auth/google` | Google OAuth redirect | No |
+| POST | `/auth/verify` | Verify email/phone | No |
+| POST | `/auth/refresh` | Refresh tokens | No |
+| POST | `/auth/logout` | Logout | Yes |
+| GET | `/auth/me` | Current user | Yes |
+| GET | `/auth/google` | Google OAuth | No |
 
-#### Users & Profile
+#### Users (`/users`)
 | Method | Endpoint | Description | Auth |
 |--------|----------|-------------|------|
 | GET | `/users/me` | Get current user | Yes |
 | PUT | `/users/me` | Update user | Yes |
-| GET | `/users/me/profile` | Get user profile | Yes |
+| GET | `/users/me/profile` | Get profile | Yes |
 | PUT | `/users/me/profile` | Update profile | Yes |
 
-#### Content
+#### Content (`/content`)
 | Method | Endpoint | Description | Auth |
 |--------|----------|-------------|------|
-| POST | `/content/generate` | Generate AI content | Yes |
+| POST | `/content/generate` | AI generate content | Yes |
 | GET | `/content` | List user content | Yes |
-| GET | `/content/:id` | Get content details | Yes |
+| GET | `/content/:id` | Get content | Yes |
 | PUT | `/content/:id` | Update content | Yes |
 | DELETE | `/content/:id` | Delete content | Yes |
-| POST | `/content/:id/schedule` | Schedule content | Yes |
+| POST | `/content/:id/schedule` | Schedule publishing | Yes |
 
-#### Publishing
+#### Workspace (`/workspace`)
 | Method | Endpoint | Description | Auth |
 |--------|----------|-------------|------|
-| POST | `/publishing/:contentId/publish` | Publish content | Yes |
-| GET | `/publishing/history` | Get publishing history | Yes |
+| GET | `/workspace` | Get user workspace | Yes |
+| POST | `/workspace` | Create workspace | Yes |
+| PUT | `/workspace` | Update workspace | Yes |
+| DELETE | `/workspace` | Delete workspace | Yes |
+| GET | `/workspace/check-slug/:slug` | Check slug availability | Yes |
 
-#### Platforms
+#### Pages (`/workspace/pages`)
 | Method | Endpoint | Description | Auth |
 |--------|----------|-------------|------|
-| GET | `/platforms` | List connected platforms | Yes |
-| GET | `/platforms/oauth/meta` | Meta OAuth URL | Yes |
-| DELETE | `/platforms/:id` | Disconnect platform | Yes |
+| GET | `/workspace/pages` | List pages | Yes |
+| POST | `/workspace/pages` | Create page | Yes |
+| GET | `/workspace/pages/:id` | Get page | Yes |
+| PUT | `/workspace/pages/:id` | Update page | Yes |
+| DELETE | `/workspace/pages/:id` | Delete page | Yes |
+| POST | `/workspace/pages/:id/publish` | Publish page | Yes |
+| POST | `/workspace/pages/:id/generate-with-ai` | AI generate page | Yes |
 
-#### Subscriptions
+#### Posts (`/workspace/posts`)
 | Method | Endpoint | Description | Auth |
 |--------|----------|-------------|------|
-| GET | `/subscriptions` | Current subscription | Yes |
-| GET | `/subscriptions/credits` | Credit balance | Yes |
-| GET | `/subscriptions/credits/history` | Credit history | Yes |
+| GET | `/workspace/posts` | List blog posts | Yes |
+| POST | `/workspace/posts` | Create post | Yes |
+| GET | `/workspace/posts/:id` | Get post | Yes |
+| PUT | `/workspace/posts/:id` | Update post | Yes |
+| DELETE | `/workspace/posts/:id` | Delete post | Yes |
+| POST | `/workspace/posts/:id/publish` | Publish post | Yes |
+| POST | `/workspace/posts/:id/sync-wordpress` | Sync to WordPress | Yes |
 
-#### Payments
+#### Menus (`/workspace/menus`)
 | Method | Endpoint | Description | Auth |
 |--------|----------|-------------|------|
-| GET | `/payments/plans` | List available plans | No |
-| POST | `/payments/create-order` | Create payment order | Yes |
+| GET | `/workspace/menus` | List menus | Yes |
+| GET | `/workspace/menus/:location` | Get menu by location | Yes |
+| PUT | `/workspace/menus/:location` | Update menu | Yes |
+
+#### Payments (`/payments`)
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| GET | `/payments/plans` | List plans | No |
+| POST | `/payments/create-order` | Create order | Yes |
 | POST | `/payments/verify` | Verify payment | Yes |
 | GET | `/payments/history` | Payment history | Yes |
-| POST | `/payments/subscriptions/create` | Create recurring subscription | Yes |
+| POST | `/payments/subscriptions/create` | Create subscription | Yes |
 | POST | `/payments/subscriptions/cancel` | Cancel subscription | Yes |
 | POST | `/payments/webhook` | Razorpay webhook | No |
 
-### Admin Endpoints (Requires ADMIN role)
-
+#### Admin (`/admin`) - Requires ADMIN role
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/admin/stats` | Dashboard statistics |
 | GET | `/admin/users` | List all users |
-| GET | `/admin/users/:id` | Get user details |
-| PUT | `/admin/users/:id` | Update user (status, role) |
+| GET | `/admin/users/:id` | User details |
+| PUT | `/admin/users/:id` | Update user |
 | DELETE | `/admin/users/:id` | Delete user |
-| GET | `/admin/plans` | List subscription plans |
+| GET | `/admin/plans` | List plans |
 | POST | `/admin/plans` | Create plan |
 | PUT | `/admin/plans/:id` | Update plan |
 | DELETE | `/admin/plans/:id` | Delete plan |
 | POST | `/admin/plans/seed` | Seed default plans |
-| GET | `/admin/credentials` | List API credentials |
+| GET | `/admin/credentials` | List credentials |
 | POST | `/admin/credentials` | Create credential |
 | PUT | `/admin/credentials/:key` | Update credential |
 | DELETE | `/admin/credentials/:key` | Delete credential |
-| GET | `/admin/payments` | Payment history (all users) |
-| GET | `/admin/audit-logs` | Audit log history |
+| GET | `/admin/payments` | All payments |
+| GET | `/admin/audit-logs` | Audit history |
 
 ---
 
-## Database
+## Database Schema
 
-### Schema Overview
+### Entity Relationship Diagram
 
 ```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                              USER & AUTHENTICATION                               │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│     User        │     │  Subscription   │     │SubscriptionPlan │
+│      User       │     │   UserProfile   │     │  RefreshToken   │
 ├─────────────────┤     ├─────────────────┤     ├─────────────────┤
-│ id              │◄────│ userId          │     │ id              │
-│ email           │     │ tier ───────────│────►│ name            │
-│ name            │     │ status          │     │ displayName     │
-│ role            │     │ creditsRemaining│     │ monthlyPrice    │
-│ status          │     │ billingCycle    │     │ yearlyPrice     │
-│ mfaEnabled      │     │ razorpaySubId   │     │ yearlyDiscount  │
-└─────────────────┘     └─────────────────┘     │ credits         │
-        │                                        │ features (JSON) │
-        │                                        │ razorpayPlanIds │
-        ▼                                        └─────────────────┘
+│ id (PK)         │◀───▶│ userId (FK,UQ)  │     │ id (PK)         │
+│ email (UQ)      │     │ businessName    │     │ userId (FK)     │
+│ phone (UQ)      │     │ industry        │     │ token (UQ)      │
+│ passwordHash    │     │ description     │     │ expiresAt       │
+│ name            │     │ services (JSON) │     └─────────────────┘
+│ avatarUrl       │     │ products (JSON) │
+│ authProvider    │     │ targetAudience  │
+│ role            │     │ location        │
+│ status          │     │ timezone        │
+│ mfaEnabled      │     │ logoUrl         │
+│ emailVerified   │     │ brandColors     │
+│ phoneVerified   │     │ tonePreference  │
+│ lastLoginAt     │     │ competitors     │
+│ createdAt       │     │ completeness    │
+│ updatedAt       │     └─────────────────┘
+└─────────────────┘
+        │
+        │ 1:1
+        ▼
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                              SUBSCRIPTIONS & PAYMENTS                            │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│    Content      │     │PlatformConnection│     │    Payment      │
+│  Subscription   │     │SubscriptionPlan │     │     Payment     │
 ├─────────────────┤     ├─────────────────┤     ├─────────────────┤
-│ id              │     │ id              │     │ id              │
-│ userId          │     │ userId          │     │ userId          │
-│ type            │     │ platform        │     │ razorpayOrderId │
-│ status          │     │ accessToken     │     │ razorpayPaymentId│
-│ caption/body    │     │ status          │     │ amount          │
-│ scheduledAt     │     │ tokenExpiry     │     │ status          │
-│ publishedAt     │     │ scopes          │     │ planId          │
-└─────────────────┘     └─────────────────┘     └─────────────────┘
+│ id (PK)         │     │ id (PK)         │     │ id (PK)         │
+│ userId (FK,UQ)  │────▶│ name (UQ)       │     │ userId (FK)     │
+│ tier            │     │ displayName     │     │ subscriptionId  │
+│ status          │     │ description     │     │ razorpayOrderId │
+│ billingCycle    │     │ monthlyPrice    │     │ razorpayPaymentId│
+│ creditsTotal    │     │ yearlyPrice     │     │ razorpaySignature│
+│ creditsRemaining│     │ yearlyDiscount  │     │ amount          │
+│ creditsRollover │     │ credits         │     │ currency        │
+│ razorpaySubId   │     │ features (JSON) │     │ status          │
+│ periodStart     │     │ razorpayPlanIds │     │ planId          │
+│ periodEnd       │     │ isActive        │     │ metadata        │
+│ canceledAt      │     │ isDefault       │     │ failureReason   │
+└─────────────────┘     │ sortOrder       │     └─────────────────┘
+        │               └─────────────────┘
         │
         ▼
+┌─────────────────┐
+│CreditTransaction│
+├─────────────────┤
+│ id (PK)         │
+│ userId (FK)     │
+│ type            │
+│ amount          │
+│ balance         │
+│ description     │
+│ referenceId     │
+│ createdAt       │
+└─────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                              CONTENT & PUBLISHING                                │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│ContentAnalytics │     │ ApiCredential   │     │   AuditLog      │
+│     Content     │     │  ContentMedia   │     │ContentAnalytics │
 ├─────────────────┤     ├─────────────────┤     ├─────────────────┤
-│ contentId       │     │ key             │     │ userId          │
-│ impressions     │     │ value (encrypted)│    │ action          │
-│ likes           │     │ category        │     │ entityType      │
-│ comments        │     │ isActive        │     │ oldValue/newValue│
-│ engagement      │     │ description     │     │ ipAddress       │
-└─────────────────┘     └─────────────────┘     └─────────────────┘
+│ id (PK)         │◀───▶│ contentId (FK)  │     │ contentId (FK)  │
+│ userId (FK)     │     │ url             │     │ impressions     │
+│ connectionId(FK)│     │ type            │     │ reach           │
+│ type            │     │ size            │     │ likes           │
+│ status          │     │ width/height    │     │ comments        │
+│ title           │     │ duration        │     │ shares          │
+│ caption         │     │ altText         │     │ saves           │
+│ body            │     │ order           │     │ clicks          │
+│ hashtags (JSON) │     └─────────────────┘     │ engagement      │
+│ mediaUrls (JSON)│                             │ lastSyncAt      │
+│ thumbnailUrl    │                             └─────────────────┘
+│ seoTitle        │
+│ seoDescription  │
+│ seoKeywords     │     ┌─────────────────┐
+│ aiPrompt        │     │PlatformConnection│
+│ aiMetadata      │     ├─────────────────┤
+│ platformPostId  │◀────│ id (PK)         │
+│ platformPostUrl │     │ userId (FK)     │
+│ scheduledAt     │     │ platform        │
+│ publishedAt     │     │ status          │
+│ creditsConsumed │     │ accountId       │
+│ errorMessage    │     │ accountName     │
+└─────────────────┘     │ accessToken     │
+                        │ refreshToken    │
+                        │ tokenExpiry     │
+                        │ scopes (JSON)   │
+                        │ metadata        │
+                        │ lastSyncAt      │
+                        └─────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                              WORKSPACE & PAGE BUILDER                            │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│    Workspace    │     │  WorkspacePage  │     │  WorkspacePost  │
+├─────────────────┤     ├─────────────────┤     ├─────────────────┤
+│ id (PK)         │◀───▶│ workspaceId(FK) │     │ workspaceId(FK) │
+│ userId (FK,UQ)  │     │ title           │     │ title           │
+│ name            │     │ slug            │     │ slug            │
+│ slug (UQ)       │     │ description     │     │ excerpt         │
+│ description     │     │ content (JSON)  │     │ content (HTML)  │
+│ logo            │     │ htmlContent     │     │ featuredImage   │
+│ favicon         │     │ cssContent      │     │ status          │
+│ settings (JSON) │     │ status          │     │ publishedAt     │
+│ isPublished     │     │ isHomePage      │     │ wpPostId        │
+│ createdAt       │     │ seoTitle        │     │ wpSyncedAt      │
+│ updatedAt       │     │ seoKeywords     │     │ wpConnectionId  │
+└─────────────────┘     │ sortOrder       │     │ seoTitle        │
+        │               │ publishedAt     │     │ seoDescription  │
+        │               └─────────────────┘     │ seoKeywords     │
+        │                                       │ tags (JSON)     │
+        ▼                                       │ categories(JSON)│
+┌─────────────────┐                             └─────────────────┘
+│  WorkspaceMenu  │
+├─────────────────┤
+│ id (PK)         │
+│ workspaceId(FK) │
+│ name            │
+│ location        │
+│ items (JSON)    │
+│ isActive        │
+└─────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                              ADMIN & SYSTEM                                      │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│  ApiCredential  │     │    AuditLog     │     │  TrendingTopic  │
+├─────────────────┤     ├─────────────────┤     ├─────────────────┤
+│ id (PK)         │     │ id (PK)         │     │ id (PK)         │
+│ key (UQ)        │     │ userId          │     │ topic           │
+│ value(encrypted)│     │ action          │     │ category        │
+│ description     │     │ entityType      │     │ score           │
+│ category        │     │ entityId        │     │ hashtags (JSON) │
+│ isActive        │     │ oldValue        │     │ keywords (JSON) │
+│ createdAt       │     │ newValue        │     │ region          │
+│ updatedAt       │     │ ipAddress       │     │ source          │
+└─────────────────┘     │ userAgent       │     │ expiresAt       │
+                        │ createdAt       │     └─────────────────┘
+                        └─────────────────┘
 ```
 
-### Common Database Commands
+### Credential Categories
 
-```bash
-# Generate Prisma client after schema changes
-npm run db:generate
-
-# Create and apply migration
-npm run db:migrate
-
-# Deploy migrations (production)
-cd apps/backend && npx prisma migrate deploy
-
-# Reset database (development only!)
-cd apps/backend && npx prisma migrate reset
-
-# Open Prisma Studio
-npm run db:studio
-```
+| Category | Keys | Purpose |
+|----------|------|---------|
+| `jasper` | `JASPER_API_KEY`, `JASPER_API_URL` | Content generation |
+| `anthropic` | `ANTHROPIC_API_KEY` | AI page generation |
+| `meta` | `META_APP_ID`, `META_APP_SECRET` | Facebook/Instagram |
+| `google` | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | YouTube/OAuth |
+| `razorpay` | `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET` | Payments |
+| `wordpress` | `WORDPRESS_CLIENT_ID`, `WORDPRESS_CLIENT_SECRET` | Blog sync |
 
 ---
 
@@ -622,92 +978,66 @@ npm run db:studio
 
 ### JWT Token Flow
 
-1. User logs in with email/password → Server returns `accessToken` (15 min) + `refreshToken` (7 days)
-2. Client stores tokens in localStorage
-3. Client sends `Authorization: Bearer <accessToken>` with requests
-4. On 401, client uses refresh token to get new access token
-5. Refresh token is rotated on each use
+```
+1. Login/Register → accessToken (15min) + refreshToken (7 days)
+2. Store tokens in localStorage
+3. Send: Authorization: Bearer <accessToken>
+4. On 401 → Call /auth/refresh with refreshToken
+5. Refresh token rotates on each use
+```
 
-### Role-Based Access Control
+### Role-Based Access
 
-| Role | Access Level |
-|------|--------------|
-| `USER` | User dashboard, content management, subscriptions |
-| `ADMIN` | All USER access + Admin panel (user management, plans, credentials) |
+| Role | Access |
+|------|--------|
+| `USER` | Dashboard, content, workspace, subscriptions |
+| `ADMIN` | All USER access + Admin panel |
 
 ### OAuth Providers
 
-- **Google OAuth 2.0**: Login and YouTube integration
-- **Meta OAuth**: Facebook and Instagram publishing
+- **Google**: Login + YouTube integration
+- **Meta**: Facebook/Instagram publishing
 
 ---
 
 ## Payment Integration
 
-### Razorpay Setup (Primary for India)
+### Razorpay Setup
 
-#### 1. One-time Payments
-
+#### One-time Payment
 ```javascript
-// Frontend: Create order
+// 1. Create order
 const { data } = await api.post('/payments/create-order', {
   plan: 'PROFESSIONAL',
   billingCycle: 'MONTHLY'
 });
 
-// Frontend: Open Razorpay checkout
+// 2. Open checkout
 const razorpay = new Razorpay({
   key: data.razorpayKeyId,
   order_id: data.razorpayOrderId,
   amount: data.amount,
   handler: async (response) => {
-    // Verify payment
-    await api.post('/payments/verify', {
-      razorpay_order_id: response.razorpay_order_id,
-      razorpay_payment_id: response.razorpay_payment_id,
-      razorpay_signature: response.razorpay_signature
-    });
+    await api.post('/payments/verify', response);
   }
 });
 razorpay.open();
 ```
 
-#### 2. Recurring Subscriptions (Auto-debit)
-
-**Admin Setup:**
-1. Create subscription plan in admin panel
-2. Click "Setup" button for Monthly/Yearly to create Razorpay plan
-
-**User Subscription:**
+#### Recurring Subscription
 ```javascript
-// Create recurring subscription
 const { data } = await api.post('/payments/subscriptions/create', {
   planId: 'PROFESSIONAL',
   billingCycle: 'MONTHLY'
 });
-
-// Redirect user to authorize
 window.location.href = data.shortUrl;
 ```
 
-### Webhook Configuration
+### Webhook Events
 
-Add to Razorpay Dashboard → Webhooks:
-```
-URL: https://api.yourdomain.com/api/v1/payments/webhook
-Secret: <your-webhook-secret>
-
-Events to enable:
-- payment.captured
-- payment.failed
-- refund.created
-- subscription.authenticated
-- subscription.activated
-- subscription.charged
-- subscription.pending
-- subscription.halted
-- subscription.cancelled
-```
+Configure in Razorpay Dashboard:
+- URL: `https://api.yourdomain.com/api/v1/payments/webhook`
+- Events: `payment.captured`, `subscription.activated`, `subscription.charged`
 
 ---
 
@@ -715,244 +1045,27 @@ Events to enable:
 
 ### Development Ports
 
-| Service | Port | URL |
-|---------|------|-----|
-| Frontend | 3000 | http://localhost:3000 |
-| Admin | 3001 | http://localhost:3001 |
-| Backend | 3002 | http://localhost:3002 |
-| Prisma Studio | 5555 | http://localhost:5555 |
+| Service | Port |
+|---------|------|
+| Frontend | 3000 |
+| Admin | 3001 |
+| Backend | 3002 |
+| Prisma Studio | 5555 |
 
-### Option 1: Docker Deployment
+### Docker Deployment
 
-#### Dockerfile.backend
-```dockerfile
-FROM node:18-alpine AS builder
-WORKDIR /app
-COPY package*.json ./
-COPY apps/backend/package*.json ./apps/backend/
-RUN npm ci --workspace=apps/backend
-COPY apps/backend ./apps/backend
-WORKDIR /app/apps/backend
-RUN npm run build
-RUN npx prisma generate
-
-FROM node:18-alpine
-WORKDIR /app
-COPY --from=builder /app/apps/backend/dist ./dist
-COPY --from=builder /app/apps/backend/prisma ./prisma
-COPY --from=builder /app/node_modules ./node_modules
-EXPOSE 3002
-CMD ["node", "dist/main"]
-```
-
-#### Dockerfile.frontend
-```dockerfile
-FROM node:18-alpine AS builder
-WORKDIR /app
-COPY package*.json ./
-COPY apps/frontend/package*.json ./apps/frontend/
-RUN npm ci --workspace=apps/frontend
-COPY apps/frontend ./apps/frontend
-WORKDIR /app/apps/frontend
-RUN npm run build
-
-FROM node:18-alpine
-WORKDIR /app
-COPY --from=builder /app/apps/frontend/.next/standalone ./
-COPY --from=builder /app/apps/frontend/.next/static ./.next/static
-COPY --from=builder /app/apps/frontend/public ./public
-EXPOSE 3000
-CMD ["node", "server.js"]
-```
-
-#### docker-compose.yml
-```yaml
-version: '3.8'
-services:
-  backend:
-    build:
-      context: .
-      dockerfile: Dockerfile.backend
-    ports:
-      - "3002:3002"
-    environment:
-      - DATABASE_URL=postgresql://jasper:jasper@db:5432/jasper
-      - JWT_SECRET=${JWT_SECRET}
-      - NODE_ENV=production
-    depends_on:
-      - db
-      - redis
-
-  frontend:
-    build:
-      context: .
-      dockerfile: Dockerfile.frontend
-    ports:
-      - "3000:3000"
-    environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:3002
-
-  admin:
-    build:
-      context: .
-      dockerfile: Dockerfile.admin
-    ports:
-      - "3001:3001"
-    environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:3002
-
-  db:
-    image: postgres:15-alpine
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    environment:
-      - POSTGRES_USER=jasper
-      - POSTGRES_PASSWORD=jasper
-      - POSTGRES_DB=jasper
-    ports:
-      - "5432:5432"
-
-  redis:
-    image: redis:7-alpine
-    volumes:
-      - redis_data:/data
-    ports:
-      - "6379:6379"
-
-volumes:
-  postgres_data:
-  redis_data:
-```
-
-### Option 2: Cloud Deployment
-
-#### Recommended: Vercel + Railway
-
-1. **Frontend & Admin → Vercel**
-   ```bash
-   # Install Vercel CLI
-   npm i -g vercel
-
-   # Deploy frontend
-   cd apps/frontend && vercel
-
-   # Deploy admin
-   cd apps/admin && vercel
-   ```
-
-2. **Backend → Railway**
-   ```bash
-   # Install Railway CLI
-   npm i -g @railway/cli
-
-   # Login and deploy
-   railway login
-   cd apps/backend
-   railway init
-   railway up
-   ```
-
-3. **Database → Railway PostgreSQL or Supabase**
-
-#### AWS Architecture
-
-```
-Route 53 (DNS)
-    │
-CloudFront (CDN + SSL)
-    │
-Application Load Balancer
-    │
-    ├── ECS Fargate (Frontend)
-    ├── ECS Fargate (Admin)
-    └── ECS Fargate (Backend)
-            │
-            ├── RDS PostgreSQL
-            ├── ElastiCache Redis
-            └── Secrets Manager
-```
-
-### CI/CD with GitHub Actions
-
-```yaml
-# .github/workflows/deploy.yml
-name: Deploy
-
-on:
-  push:
-    branches: [main]
-
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-          cache: 'npm'
-      - run: npm ci
-      - run: npm run lint
-      - run: npm run test
-
-  deploy-backend:
-    needs: test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Deploy to Railway
-        uses: railwayapp/railway-action@v1
-        with:
-          service: backend
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-
-  deploy-frontend:
-    needs: test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: amondnet/vercel-action@v25
-        with:
-          vercel-token: ${{ secrets.VERCEL_TOKEN }}
-          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
-          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
-          working-directory: ./apps/frontend
-```
+See `docker-compose.yml` for full stack deployment with PostgreSQL and Redis.
 
 ### Production Checklist
 
-#### Security
-- [ ] Change all default secrets (`JWT_SECRET`, `ENCRYPTION_KEY`)
+- [ ] Change all secrets (`JWT_SECRET`, `ENCRYPTION_KEY`)
 - [ ] Enable HTTPS everywhere
-- [ ] Configure CORS with specific origins
-- [ ] Enable rate limiting (configured in NestJS Throttler)
-- [ ] Review Helmet security headers
-- [ ] Secure cookie settings for refresh tokens
-
-#### Database
-- [ ] Migrate from SQLite to PostgreSQL
-- [ ] Configure connection pooling
-- [ ] Set up automated backups
-- [ ] Run `npx prisma migrate deploy`
-
-#### Monitoring
-- [ ] Set up error tracking (Sentry, Bugsnag)
-- [ ] Configure application logging
-- [ ] Set up health check endpoints
-- [ ] Configure uptime monitoring
-
-#### Performance
-- [ ] Enable Redis caching for credentials
-- [ ] Configure CDN for static assets
-- [ ] Enable gzip/brotli compression
-- [ ] Set up auto-scaling
-
-#### Payments
-- [ ] Switch to production Razorpay keys
-- [ ] Configure webhook URL in Razorpay dashboard
+- [ ] Configure CORS origins
+- [ ] Switch to PostgreSQL
+- [ ] Enable Redis caching
+- [ ] Set up error tracking (Sentry)
+- [ ] Configure Razorpay webhook URL
 - [ ] Test all payment flows
-- [ ] Set up subscription plans in admin
 
 ---
 
@@ -961,197 +1074,125 @@ jobs:
 ### Backend (`apps/backend/.env`)
 
 ```bash
-# ============================================
 # Application
-# ============================================
-NODE_ENV=production
+NODE_ENV=development
 PORT=3002
-APP_URL=https://api.yourdomain.com
-FRONTEND_URL=https://yourdomain.com
-CORS_ORIGINS=https://yourdomain.com,https://admin.yourdomain.com
+APP_URL=http://localhost:3002
+FRONTEND_URL=http://localhost:3000
+CORS_ORIGINS=http://localhost:3000,http://localhost:3001
 
-# ============================================
 # Database
-# ============================================
-# Development (SQLite)
 DATABASE_URL=file:./dev.db
 
-# Production (PostgreSQL)
-DATABASE_URL=postgresql://user:password@host:5432/database?schema=public
-
-# ============================================
-# JWT Authentication
-# ============================================
-JWT_SECRET=your-super-secret-jwt-key-minimum-32-characters-long
+# JWT
+JWT_SECRET=your-secret-minimum-32-characters
 JWT_EXPIRES_IN=15m
 REFRESH_TOKEN_DAYS=7
 
-# ============================================
 # Google OAuth
-# ============================================
-GOOGLE_CLIENT_ID=your-google-client-id.apps.googleusercontent.com
-GOOGLE_CLIENT_SECRET=your-google-client-secret
-GOOGLE_CALLBACK_URL=https://api.yourdomain.com/api/v1/auth/google/callback
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+GOOGLE_CALLBACK_URL=http://localhost:3002/api/v1/auth/google/callback
 
-# ============================================
-# Meta (Facebook/Instagram)
-# ============================================
-META_APP_ID=your-meta-app-id
-META_APP_SECRET=your-meta-app-secret
+# Meta
+META_APP_ID=
+META_APP_SECRET=
 
-# ============================================
 # WordPress
-# ============================================
-WORDPRESS_CLIENT_ID=your-wordpress-client-id
-WORDPRESS_CLIENT_SECRET=your-wordpress-client-secret
+WORDPRESS_CLIENT_ID=
+WORDPRESS_CLIENT_SECRET=
 
-# ============================================
 # Jasper AI
-# ============================================
-JASPER_API_KEY=your-jasper-api-key
+JASPER_API_KEY=
 JASPER_API_URL=https://api.jasper.ai/v1
 
-# ============================================
-# Razorpay (Payments)
-# ============================================
-RAZORPAY_KEY_ID=rzp_live_xxxxxxxxxxxx
-RAZORPAY_KEY_SECRET=your-razorpay-secret
-RAZORPAY_WEBHOOK_SECRET=your-webhook-secret
+# Anthropic (Claude)
+ANTHROPIC_API_KEY=
 
-# ============================================
-# Stripe (Optional - Global payments)
-# ============================================
-STRIPE_SECRET_KEY=sk_live_xxxxxxxxxxxx
-STRIPE_WEBHOOK_SECRET=whsec_xxxxxxxxxxxx
-STRIPE_PUBLISHABLE_KEY=pk_live_xxxxxxxxxxxx
+# Razorpay
+RAZORPAY_KEY_ID=
+RAZORPAY_KEY_SECRET=
+RAZORPAY_WEBHOOK_SECRET=
 
-# ============================================
-# Redis (Optional - Caching)
-# ============================================
-REDIS_URL=redis://localhost:6379
-
-# ============================================
-# Encryption (for stored credentials)
-# ============================================
-# Generate with: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-ENCRYPTION_KEY=your-32-byte-hex-encryption-key
+# Encryption
+CREDENTIALS_ENCRYPTION_KEY=your-32-character-encryption-key
 ```
 
 ### Frontend (`apps/frontend/.env.local`)
 
 ```bash
-NEXT_PUBLIC_API_URL=https://api.yourdomain.com
-NEXT_PUBLIC_APP_URL=https://yourdomain.com
-NEXT_PUBLIC_RAZORPAY_KEY_ID=rzp_live_xxxxxxxxxxxx
+NEXT_PUBLIC_API_URL=http://localhost:3002
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+NEXT_PUBLIC_RAZORPAY_KEY_ID=rzp_test_xxxx
 ```
 
 ### Admin (`apps/admin/.env.local`)
 
 ```bash
-NEXT_PUBLIC_API_URL=https://api.yourdomain.com
+NEXT_PUBLIC_API_URL=http://localhost:3002
 ```
 
 ---
 
 ## Troubleshooting
 
-### Common Issues
+### Port Already in Use
 
-#### Port Already in Use
-
-**Windows (PowerShell):**
+**Windows:**
 ```powershell
-# Use the provided script
 .\kill-ports.ps1
-
-# Or manually
-netstat -ano | findstr :3002
-taskkill /PID <PID> /F
 ```
 
 **Linux/Mac:**
 ```bash
-lsof -i :3002
-kill -9 <PID>
+lsof -i :3002 && kill -9 <PID>
 ```
 
-#### Prisma Client Generation Failed
-```bash
-# Stop all running servers first, then:
-cd apps/backend
-npx prisma generate --schema=prisma/schema.prisma
-```
-
-#### Database Connection Issues
-```bash
-# Verify DATABASE_URL is set correctly
-echo $DATABASE_URL
-
-# Test connection
-cd apps/backend
-npx prisma db pull
-
-# Reset if needed (dev only!)
-npx prisma migrate reset
-```
-
-#### CORS Errors
-1. Check `CORS_ORIGINS` in backend `.env` includes your frontend URL
-2. Ensure no trailing slash in URLs
-3. Check browser console for specific blocked origin
-
-#### JWT Token Issues
-- Verify `JWT_SECRET` is set and consistent across restarts
-- Check token expiration (`JWT_EXPIRES_IN`)
-- Ensure clocks are synchronized (important for containerized apps)
-
-### Useful Commands
+### Prisma Issues
 
 ```bash
-# Check backend health
-curl http://localhost:3002/api/v1/health
-
-# View backend logs in development
-npm run dev:backend
-
-# View Prisma query logs (add to .env)
-DEBUG=prisma:query
-
-# Database introspection
 cd apps/backend
-npx prisma db pull
+npx prisma generate
+npx prisma migrate reset  # Dev only!
 ```
 
-### Getting Help
+### CORS Errors
 
-- **Documentation**: Check this README and inline code comments
-- **API Docs**: http://localhost:3002/api/docs (Swagger)
-- **Prisma Studio**: `npm run db:studio`
-- **GitHub Issues**: Report bugs and feature requests
+Check `CORS_ORIGINS` in backend `.env` includes frontend URL without trailing slash.
+
+### Missing UI Components
+
+If you see "Module not found" for UI components:
+```bash
+cd apps/frontend
+npm install
+```
+
+All shadcn/ui components are in `apps/frontend/src/components/ui/`.
 
 ---
 
-## Credit Costs
+## Credit System
 
 | Content Type | Credits |
 |--------------|---------|
-| Instagram Image Post | 5 |
+| Instagram Image | 5 |
 | Instagram Carousel | 8 |
 | Instagram Video/Reel | 15 |
-| Facebook Image Post | 5 |
-| Facebook Video Post | 15 |
+| Facebook Image | 5 |
+| Facebook Video | 15 |
 | Blog Post (500 words) | 10 |
 | Blog Post (1000+ words) | 20 |
-| Ad Campaign Creation | 25 |
+| Ad Campaign | 25 |
 
 ## Default Subscription Plans
 
-| Plan | Monthly Price | Yearly Price | Credits | Discount |
-|------|---------------|--------------|---------|----------|
+| Plan | Monthly | Yearly | Credits | Yearly Discount |
+|------|---------|--------|---------|-----------------|
 | Starter | Free | Free | 100 | - |
-| Professional | Rs 999 | Rs 9,590 | 500 | 20% |
-| Business | Rs 2,999 | Rs 28,790 | 2,000 | 20% |
-| Enterprise | Rs 9,999 | Rs 95,990 | 10,000 | 20% |
+| Professional | ₹999 | ₹9,590 | 500 | 20% |
+| Business | ₹2,999 | ₹28,790 | 2,000 | 20% |
+| Enterprise | ₹9,999 | ₹95,990 | 10,000 | 20% |
 
 ---
 
@@ -1164,10 +1205,9 @@ This project is proprietary software. All rights reserved.
 ## Contributing
 
 1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes using conventional commits
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+2. Create feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit using conventional commits
+4. Push and open Pull Request
 
 ---
 

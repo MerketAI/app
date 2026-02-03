@@ -14,6 +14,10 @@ import { HealthModule } from './modules/health/health.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { CredentialsModule } from './modules/credentials/credentials.module';
 import { RazorpayModule } from './modules/razorpay/razorpay.module';
+import { WorkspaceModule } from './modules/workspace/workspace.module';
+import { UploadModule } from './modules/upload/upload.module';
+import { BusinessModule } from './modules/business/business.module';
+import { AiScraperModule } from './modules/ai-scraper/ai-scraper.module';
 
 @Module({
   imports: [
@@ -60,6 +64,18 @@ import { RazorpayModule } from './modules/razorpay/razorpay.module';
     AdminModule,
     CredentialsModule,
     RazorpayModule,
+
+    // Workspace & Page Builder
+    WorkspaceModule,
+
+    // File Upload
+    UploadModule,
+
+    // Business Intelligence
+    BusinessModule,
+
+    // AI Scraper (Multi-provider data fetching)
+    AiScraperModule,
   ],
 })
 export class AppModule {}

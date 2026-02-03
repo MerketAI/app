@@ -7,6 +7,9 @@ export const CredentialCategory = {
   GOOGLE: 'google',
   RAZORPAY: 'razorpay',
   WORDPRESS: 'wordpress',
+  ANTHROPIC: 'anthropic',
+  AWS: 'aws',
+  AI_SCRAPER: 'ai_scraper',
   GENERAL: 'general',
 } as const;
 export type CredentialCategory = (typeof CredentialCategory)[keyof typeof CredentialCategory];
@@ -101,6 +104,21 @@ export const CREDENTIAL_KEYS = {
   // WordPress
   WORDPRESS_CLIENT_ID: 'WORDPRESS_CLIENT_ID',
   WORDPRESS_CLIENT_SECRET: 'WORDPRESS_CLIENT_SECRET',
+
+  // Anthropic
+  ANTHROPIC_API_KEY: 'ANTHROPIC_API_KEY',
+
+  // AI Scraper Providers
+  PERPLEXITY_API_KEY: 'PERPLEXITY_API_KEY',
+  SERPER_API_KEY: 'SERPER_API_KEY',
+  OPENAI_API_KEY: 'OPENAI_API_KEY',
+  FIRECRAWL_API_KEY: 'FIRECRAWL_API_KEY',
+
+  // AWS S3
+  AWS_ACCESS_KEY_ID: 'AWS_ACCESS_KEY_ID',
+  AWS_SECRET_ACCESS_KEY: 'AWS_SECRET_ACCESS_KEY',
+  AWS_S3_BUCKET: 'AWS_S3_BUCKET',
+  AWS_S3_REGION: 'AWS_S3_REGION',
 
   // General
   ENCRYPTION_KEY: 'ENCRYPTION_KEY',

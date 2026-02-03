@@ -307,4 +307,107 @@ export class AdminController {
 
     return result;
   }
+
+  // =====================
+  // Workspace Management
+  // =====================
+
+  @Get('workspaces')
+  @ApiOperation({ summary: 'Get all workspaces' })
+  @ApiResponse({ status: 200, description: 'List of workspaces' })
+  async getWorkspaces(
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+    @Query('search') search?: string,
+    @Query('isPublished') isPublished?: string,
+  ) {
+    return this.adminService.getWorkspaces({
+      page,
+      limit,
+      search,
+      isPublished: isPublished === 'true' ? true : isPublished === 'false' ? false : undefined,
+    });
+  }
+
+  @Get('workspaces/:id')
+  @ApiOperation({ summary: 'Get workspace details' })
+  @ApiResponse({ status: 200, description: 'Workspace details' })
+  @ApiResponse({ status: 404, description: 'Workspace not found' })
+  async getWorkspaceById(@Param('id') id: string) {
+    return this.adminService.getWorkspaceById(id);
+  }
+
+  @Put('workspaces/:id/publish')
+  @ApiOperation({ summary: 'Toggle workspace publish status' })
+  @ApiResponse({ status: 200, description: 'Workspace updated' })
+  @ApiResponse({ status: 404, description: 'Workspace not found' })
+  async toggleWorkspacePublish(
+    @Param('id') id: string,
+    @Body('isPublished') isPublished: boolean,
+    @CurrentUser('id') adminId: string,
+    @Req() req: Request,
+  ) {
+    const result = await this.adminService.toggleWorkspacePublish(id, isPublished);
+
+    await this.adminService.logAuditAction(
+      adminId,
+      'TOGGLE_WORKSPACE_PUBLISH',
+      'Workspace',
+      id,
+      null,
+      { isPublished },
+      req.ip,
+      req.headers['user-agent'],
+    );
+
+    return result;
+  }
+
+  @Delete('workspaces/:id')
+  @ApiOperation({ summary: 'Delete workspace' })
+  @ApiResponse({ status: 200, description: 'Workspace deleted' })
+  @ApiResponse({ status: 404, description: 'Workspace not found' })
+  async deleteWorkspace(
+    @Param('id') id: string,
+    @CurrentUser('id') adminId: string,
+    @Req() req: Request,
+  ) {
+    const workspace = await this.adminService.getWorkspaceById(id);
+    const result = await this.adminService.deleteWorkspace(id);
+
+    await this.adminService.logAuditAction(
+      adminId,
+      'DELETE_WORKSPACE',
+      'Workspace',
+      id,
+      { slug: workspace.slug, name: workspace.name },
+      null,
+      req.ip,
+      req.headers['user-agent'],
+    );
+
+    return result;
+  }
+
+  // =====================
+  // Credit Utilization
+  // =====================
+
+  @Get('credits/utilization')
+  @ApiOperation({ summary: 'Get credit utilization for all subscribers' })
+  @ApiResponse({ status: 200, description: 'Credit utilization data' })
+  async getCreditUtilization(
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+    @Query('tier') tier?: string,
+  ) {
+    return this.adminService.getCreditUtilization({ page, limit, tier });
+  }
+
+  @Get('credits/stats')
+  @ApiOperation({ summary: 'Get overall credit statistics' })
+  @ApiResponse({ status: 200, description: 'Credit statistics' })
+  async getCreditStats() {
+    return this.adminService.getCreditStats();
+  }
 }

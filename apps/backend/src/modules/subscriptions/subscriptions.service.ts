@@ -326,4 +326,26 @@ export class SubscriptionsService {
       data: { status: 'PAST_DUE' },
     });
   }
+
+  // Public plans endpoint
+  async getPublicPlans() {
+    const plans = await this.prisma.subscriptionPlan.findMany({
+      where: { isActive: true },
+      orderBy: { sortOrder: 'asc' },
+    });
+
+    return plans.map((plan) => ({
+      id: plan.id,
+      name: plan.name,
+      displayName: plan.displayName,
+      description: plan.description,
+      monthlyPrice: plan.monthlyPrice / 100, // Convert cents to dollars
+      yearlyPrice: plan.yearlyPrice / 100,
+      yearlyDiscount: plan.yearlyDiscount,
+      credits: plan.credits,
+      features: JSON.parse(plan.features || '[]'),
+      isDefault: plan.isDefault,
+      isPopular: plan.name === 'PROFESSIONAL', // Mark Professional as popular
+    }));
+  }
 }

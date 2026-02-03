@@ -15,6 +15,8 @@ import {
   Menu,
   X,
   Package,
+  Globe,
+  Zap,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useState } from 'react';
@@ -22,9 +24,11 @@ import { useState } from 'react';
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Users', href: '/dashboard/users', icon: Users },
+  { name: 'Workspaces', href: '/dashboard/workspaces', icon: Globe },
+  { name: 'Credits', href: '/dashboard/credits', icon: Zap },
   { name: 'Plans', href: '/dashboard/plans', icon: Package },
-  { name: 'Credentials', href: '/dashboard/credentials', icon: Key },
   { name: 'Payments', href: '/dashboard/payments', icon: CreditCard },
+  { name: 'Credentials', href: '/dashboard/credentials', icon: Key },
 ];
 
 export default function DashboardLayout({
