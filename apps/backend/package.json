@@ -4,10 +4,10 @@
   "description": "Marketing Automation Backend API",
   "private": true,
   "scripts": {
-    "build": "npx prisma generate && npx nest build",
+    "build": "npx prisma generate && npx nest build && echo 'Build complete - dist/main.js exists:' && ls dist/main.js",
     "postinstall": "npx prisma generate || true",
     "dev": "nest start --watch",
-    "start": "nest start",
+    "start": "node dist/main",
     "start:prod": "node dist/main",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
     "test": "jest",
