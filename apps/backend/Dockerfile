@@ -23,3 +23,4 @@ EXPOSE 3002
 
 # Start the server
 CMD ["node", "dist/main"]
+# Railway Dockerfile deployment
