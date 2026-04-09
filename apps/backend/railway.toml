@@ -1,0 +1,6 @@
+[build]
+builder = "RAILPACK"
+buildCommand = "npx prisma generate && npx nest build"
+
+[deploy]
+startCommand = "node dist/main"
