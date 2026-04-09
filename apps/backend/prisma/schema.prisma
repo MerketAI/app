@@ -37,6 +37,15 @@ model User {
   refreshTokens       RefreshToken[]
   payments            Payment[]
   workspace           Workspace?
+  adCampaigns         AdCampaign[]
+  leads               Lead[]
+  emailLists          EmailList[]
+  emailContacts       EmailContact[]
+  emailCampaigns      EmailCampaign[]
+  emailSequences      EmailSequence[]
+  designs             Design[]
+  videoProjects       VideoProject[]
+  analyticsSnapshots  AnalyticsSnapshot[]
 
   @@map("users")
 }
@@ -479,8 +488,9 @@ model PlatformConnection {
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")
 
-  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  contents Content[]
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contents     Content[]
+  adCampaigns  AdCampaign[]
 
   @@unique([userId, platform, accountId])
   @@map("platform_connections")
@@ -751,4 +761,313 @@ model WorkspaceMenu {
   @@unique([workspaceId, location])
   @@index([workspaceId])
   @@map("workspace_menus")
+}
+
+// ============================================
+// Ad Campaign Models (Google Ads + Meta Ads)
+// ============================================
+
+model AdCampaign {
+  id                 String    @id @default(uuid())
+  userId             String    @map("user_id")
+  connectionId       String    @map("connection_id")
+  platform           String    // GOOGLE_ADS, META_ADS
+  platformCampaignId String?   @map("platform_campaign_id")
+  name               String
+  type               String    // SEARCH, DISPLAY, SHOPPING, AWARENESS, TRAFFIC, CONVERSIONS, LEADS
+  objective          String?
+  status             String    @default("DRAFT") // DRAFT, ACTIVE, PAUSED, COMPLETED, FAILED
+  budget             Float     @default(0)
+  budgetType         String    @default("DAILY") @map("budget_type") // DAILY, LIFETIME
+  currency           String    @default("USD")
+  startDate          DateTime? @map("start_date")
+  endDate            DateTime? @map("end_date")
+  targeting          String    @default("{}") // JSON: keywords, audiences, demographics, locations
+  adCreatives        String    @default("[]") @map("ad_creatives") // JSON array of ad creative configs
+  settings           String    @default("{}") // JSON: platform-specific settings
+  creditsConsumed    Int       @default(0) @map("credits_consumed")
+  lastSyncAt         DateTime? @map("last_sync_at")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  user       User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  connection PlatformConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  metrics    AdCampaignMetric[]
+  adGroups   AdGroup[]
+
+  @@index([userId, platform, status])
+  @@map("ad_campaigns")
+}
+
+model AdGroup {
+  id                String   @id @default(uuid())
+  campaignId        String   @map("campaign_id")
+  platformAdGroupId String?  @map("platform_ad_group_id")
+  name              String
+  status            String   @default("ACTIVE")
+  bidStrategy       String?  @map("bid_strategy")
+  bidAmount         Float?   @map("bid_amount")
+  keywords          String   @default("[]") // JSON array
+  negativeKeywords  String   @default("[]") @map("negative_keywords")
+  ads               String   @default("[]") // JSON array of ad objects
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  campaign AdCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId])
+  @@map("ad_groups")
+}
+
+model AdCampaignMetric {
+  id             String   @id @default(uuid())
+  campaignId     String   @map("campaign_id")
+  date           DateTime
+  impressions    Int      @default(0)
+  clicks         Int      @default(0)
+  ctr            Float    @default(0)
+  cpc            Float    @default(0)
+  cost           Float    @default(0)
+  conversions    Int      @default(0)
+  conversionRate Float    @default(0) @map("conversion_rate")
+  roas           Float?
+  reach          Int      @default(0)
+  cpa            Float?
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  campaign AdCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, date])
+  @@index([campaignId, date])
+  @@map("ad_campaign_metrics")
+}
+
+// ============================================
+// Lead Management / CRM Models
+// ============================================
+
+model Lead {
+  id              String    @id @default(uuid())
+  userId          String    @map("user_id")
+  email           String?
+  phone           String?
+  name            String
+  company         String?
+  source          String?   // GOOGLE_ADS, META_ADS, FORM, WEBSITE, MANUAL, EMAIL
+  sourceId        String?   @map("source_id")
+  stage           String    @default("NEW") // NEW, CONTACTED, QUALIFIED, PROPOSAL, NEGOTIATION, CONVERTED, LOST
+  score           Int       @default(0)
+  assignedTo      String?   @map("assigned_to")
+  tags            String    @default("[]")
+  customFields    String    @default("{}") @map("custom_fields")
+  lastContactedAt DateTime? @map("last_contacted_at")
+  convertedAt     DateTime? @map("converted_at")
+  lostReason      String?   @map("lost_reason")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  activities LeadActivity[]
+  notes      LeadNote[]
+
+  @@index([userId, stage])
+  @@index([userId, source])
+  @@index([userId, score])
+  @@map("leads")
+}
+
+model LeadActivity {
+  id        String   @id @default(uuid())
+  leadId    String   @map("lead_id")
+  type      String   // STAGE_CHANGE, EMAIL_SENT, CALL, NOTE, AD_CLICK, FORM_SUBMIT, PAGE_VIEW
+  data      String   @default("{}") // JSON
+  createdAt DateTime @default(now()) @map("created_at")
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId, createdAt])
+  @@map("lead_activities")
+}
+
+model LeadNote {
+  id        String   @id @default(uuid())
+  leadId    String   @map("lead_id")
+  content   String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId])
+  @@map("lead_notes")
+}
+
+// ============================================
+// Email Marketing Models
+// ============================================
+
+model EmailList {
+  id           String   @id @default(uuid())
+  userId       String   @map("user_id")
+  name         String
+  description  String?
+  tags         String   @default("[]")
+  contactCount Int      @default(0) @map("contact_count")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contacts  EmailContact[]
+  campaigns EmailCampaign[]
+
+  @@index([userId])
+  @@map("email_lists")
+}
+
+model EmailContact {
+  id       String   @id @default(uuid())
+  userId   String   @map("user_id")
+  listId   String   @map("list_id")
+  email    String
+  name     String?
+  status   String   @default("SUBSCRIBED") // SUBSCRIBED, UNSUBSCRIBED, BOUNCED
+  metadata String   @default("{}") // JSON
+  leadId   String?  @map("lead_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  list EmailList @relation(fields: [listId], references: [id], onDelete: Cascade)
+
+  @@unique([listId, email])
+  @@index([userId])
+  @@map("email_contacts")
+}
+
+model EmailCampaign {
+  id            String    @id @default(uuid())
+  userId        String    @map("user_id")
+  listId        String?   @map("list_id")
+  name          String
+  subject       String
+  previewText   String?   @map("preview_text")
+  htmlContent   String    @default("") @map("html_content")
+  type          String    @default("BROADCAST") // BROADCAST, SEQUENCE
+  status        String    @default("DRAFT") // DRAFT, SCHEDULED, SENDING, SENT, FAILED
+  scheduledAt   DateTime? @map("scheduled_at")
+  sentAt        DateTime? @map("sent_at")
+  totalSent     Int       @default(0) @map("total_sent")
+  totalOpened   Int       @default(0) @map("total_opened")
+  totalClicked  Int       @default(0) @map("total_clicked")
+  totalBounced  Int       @default(0) @map("total_bounced")
+  creditsConsumed Int     @default(0) @map("credits_consumed")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  user User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  list EmailList? @relation(fields: [listId], references: [id], onDelete: SetNull)
+
+  @@index([userId, status])
+  @@map("email_campaigns")
+}
+
+model EmailSequence {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  name        String
+  description String?
+  status      String   @default("DRAFT") // DRAFT, ACTIVE, PAUSED
+  triggerType String   @default("MANUAL") @map("trigger_type") // MANUAL, LEAD_STAGE, FORM_SUBMIT
+  steps       String   @default("[]") // JSON array of {delayDays, subject, htmlContent}
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("email_sequences")
+}
+
+// ============================================
+// Design / Flyer Models
+// ============================================
+
+model Design {
+  id              String   @id @default(uuid())
+  userId          String   @map("user_id")
+  name            String
+  template        String?
+  category        String?  // SOCIAL_POST, FLYER, BANNER, POSTER, STORY, AD
+  htmlContent     String   @default("") @map("html_content")
+  cssContent      String?  @map("css_content")
+  width           Int      @default(1080)
+  height          Int      @default(1080)
+  sizePreset      String?  @map("size_preset") // INSTAGRAM_POST, FACEBOOK_COVER, A4_FLYER, etc.
+  outputUrl       String?  @map("output_url")
+  thumbnailUrl    String?  @map("thumbnail_url")
+  creditsConsumed Int      @default(0) @map("credits_consumed")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("designs")
+}
+
+// ============================================
+// Video Project Models
+// ============================================
+
+model VideoProject {
+  id              String   @id @default(uuid())
+  userId          String   @map("user_id")
+  name            String
+  type            String   // PRODUCT_SHOWCASE, TESTIMONIAL, EXPLAINER, SOCIAL_AD, PROMO
+  provider        String   @default("RUNWAY") // RUNWAY, HEYGEN
+  status          String   @default("DRAFT") // DRAFT, GENERATING, COMPLETED, FAILED
+  prompt          String?
+  scriptContent   String?  @map("script_content")
+  settings        String   @default("{}") // JSON: aspect ratio, duration, style
+  providerJobId   String?  @map("provider_job_id")
+  videoUrl        String?  @map("video_url")
+  thumbnailUrl    String?  @map("thumbnail_url")
+  duration        Int?     // seconds
+  creditsConsumed Int      @default(0) @map("credits_consumed")
+  errorMessage    String?  @map("error_message")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("video_projects")
+}
+
+// ============================================
+// Google Analytics Snapshots
+// ============================================
+
+model AnalyticsSnapshot {
+  id                 String   @id @default(uuid())
+  userId             String   @map("user_id")
+  connectionId       String   @map("connection_id")
+  propertyId         String   @map("property_id")
+  date               DateTime
+  sessions           Int      @default(0)
+  users              Int      @default(0)
+  newUsers           Int      @default(0) @map("new_users")
+  pageViews          Int      @default(0) @map("page_views")
+  bounceRate         Float    @default(0) @map("bounce_rate")
+  avgSessionDuration Float    @default(0) @map("avg_session_duration")
+  trafficSources     String   @default("{}") @map("traffic_sources")
+  topPages           String   @default("[]") @map("top_pages")
+  conversions        Int      @default(0)
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, propertyId, date])
+  @@index([userId, date])
+  @@map("analytics_snapshots")
 }

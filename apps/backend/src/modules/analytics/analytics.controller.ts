@@ -15,6 +15,7 @@ import {
   ApiBearerAuth,
 } from '@nestjs/swagger';
 import { AnalyticsService } from './analytics.service';
+import { GoogleAnalyticsService } from './google-analytics.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
@@ -23,7 +24,10 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class AnalyticsController {
-  constructor(private analyticsService: AnalyticsService) {}
+  constructor(
+    private analyticsService: AnalyticsService,
+    private googleAnalyticsService: GoogleAnalyticsService,
+  ) {}
 
   @Get('dashboard')
   @ApiOperation({ summary: 'Get dashboard statistics' })
@@ -59,5 +63,47 @@ export class AnalyticsController {
   @ApiOperation({ summary: 'Sync analytics from platform' })
   async syncAnalytics(@Param('id') contentId: string) {
     return this.analyticsService.syncAnalytics(contentId);
+  }
+
+  // ==========================================
+  // Google Analytics (GA4) Endpoints
+  // ==========================================
+
+  @Get('ga/properties')
+  @ApiOperation({ summary: 'List GA4 properties accessible to the user' })
+  async getGAProperties(@CurrentUser('id') userId: string) {
+    return this.googleAnalyticsService.getProperties(userId);
+  }
+
+  @Get('ga/dashboard')
+  @ApiOperation({ summary: 'Get GA4 traffic dashboard' })
+  async getGADashboard(
+    @CurrentUser('id') userId: string,
+    @Query('propertyId') propertyId: string,
+    @Query('startDate') startDate: string,
+    @Query('endDate') endDate: string,
+  ) {
+    return this.googleAnalyticsService.getDashboard(userId, propertyId, startDate, endDate);
+  }
+
+  @Get('ga/traffic-sources')
+  @ApiOperation({ summary: 'Get GA4 traffic source breakdown' })
+  async getGATrafficSources(
+    @CurrentUser('id') userId: string,
+    @Query('propertyId') propertyId: string,
+    @Query('startDate') startDate: string,
+    @Query('endDate') endDate: string,
+  ) {
+    return this.googleAnalyticsService.getTrafficSources(userId, propertyId, startDate, endDate);
+  }
+
+  @Post('ga/sync')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Sync GA4 analytics data for last 30 days' })
+  async syncGAAnalytics(
+    @CurrentUser('id') userId: string,
+    @Query('propertyId') propertyId: string,
+  ) {
+    return this.googleAnalyticsService.syncAnalytics(userId, propertyId);
   }
 }

@@ -18,6 +18,12 @@ import {
   Newspaper,
   Menu,
   Building2,
+  Megaphone,
+  Users,
+  Mail,
+  Palette,
+  Video,
+  TrendingUp,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -26,6 +32,12 @@ import { useAuthStore } from '@/store/auth';
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Content', href: '/dashboard/content', icon: FileText },
+  { name: 'Ads Manager', href: '/dashboard/ads', icon: Megaphone },
+  { name: 'Leads', href: '/dashboard/leads', icon: Users },
+  { name: 'Email', href: '/dashboard/email', icon: Mail },
+  { name: 'Designs', href: '/dashboard/designs', icon: Palette },
+  { name: 'Videos', href: '/dashboard/videos', icon: Video },
+  { name: 'Trends', href: '/dashboard/trends', icon: TrendingUp },
   { name: 'Platforms', href: '/dashboard/platforms', icon: Share2 },
   { name: 'Analytics', href: '/dashboard/analytics', icon: BarChart3 },
   { name: 'Business', href: '/dashboard/business', icon: Building2 },

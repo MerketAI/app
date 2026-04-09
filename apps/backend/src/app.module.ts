@@ -18,6 +18,12 @@ import { WorkspaceModule } from './modules/workspace/workspace.module';
 import { UploadModule } from './modules/upload/upload.module';
 import { BusinessModule } from './modules/business/business.module';
 import { AiScraperModule } from './modules/ai-scraper/ai-scraper.module';
+import { AdsModule } from './modules/ads/ads.module';
+import { LeadsModule } from './modules/leads/leads.module';
+import { EmailModule } from './modules/email/email.module';
+import { DesignModule } from './modules/design/design.module';
+import { VideoModule } from './modules/video/video.module';
+import { TrendsModule } from './modules/trends/trends.module';
 
 @Module({
   imports: [
@@ -76,6 +82,24 @@ import { AiScraperModule } from './modules/ai-scraper/ai-scraper.module';
 
     // AI Scraper (Multi-provider data fetching)
     AiScraperModule,
+
+    // Ads Management (Google Ads + Meta Ads)
+    AdsModule,
+
+    // Lead Management / CRM
+    LeadsModule,
+
+    // Email Marketing
+    EmailModule,
+
+    // Design / Flyer Creation
+    DesignModule,
+
+    // Video Creation
+    VideoModule,
+
+    // Trends & Market Intelligence
+    TrendsModule,
   ],
 })
 export class AppModule {}

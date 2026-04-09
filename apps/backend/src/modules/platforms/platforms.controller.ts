@@ -142,6 +142,66 @@ export class PlatformsController {
     }
   }
 
+  // LinkedIn OAuth
+  @Get('oauth/linkedin')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get LinkedIn OAuth URL' })
+  async getLinkedInAuthUrl(@CurrentUser('id') userId: string) {
+    const redirectUri = `${this.configService.get('APP_URL')}/api/v1/platforms/oauth/linkedin/callback`;
+    const state = Buffer.from(JSON.stringify({ userId })).toString('base64');
+    const url = await this.platformsService.getLinkedInAuthUrl(redirectUri, state);
+    return { url };
+  }
+
+  @Get('oauth/linkedin/callback')
+  @ApiOperation({ summary: 'LinkedIn OAuth callback' })
+  async handleLinkedInCallback(
+    @Query('code') code: string,
+    @Query('state') state: string,
+    @Res() res: Response,
+  ) {
+    const { userId } = JSON.parse(Buffer.from(state, 'base64').toString());
+    const redirectUri = `${this.configService.get('APP_URL')}/api/v1/platforms/oauth/linkedin/callback`;
+
+    try {
+      await this.platformsService.handleLinkedInCallback(userId, code, redirectUri);
+      res.redirect(`${this.configService.get('FRONTEND_URL')}/dashboard/platforms?success=linkedin`);
+    } catch (error) {
+      res.redirect(`${this.configService.get('FRONTEND_URL')}/dashboard/platforms?error=linkedin`);
+    }
+  }
+
+  // TikTok OAuth
+  @Get('oauth/tiktok')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get TikTok OAuth URL' })
+  async getTikTokAuthUrl(@CurrentUser('id') userId: string) {
+    const redirectUri = `${this.configService.get('APP_URL')}/api/v1/platforms/oauth/tiktok/callback`;
+    const state = Buffer.from(JSON.stringify({ userId })).toString('base64');
+    const url = await this.platformsService.getTikTokAuthUrl(redirectUri, state);
+    return { url };
+  }
+
+  @Get('oauth/tiktok/callback')
+  @ApiOperation({ summary: 'TikTok OAuth callback' })
+  async handleTikTokCallback(
+    @Query('code') code: string,
+    @Query('state') state: string,
+    @Res() res: Response,
+  ) {
+    const { userId } = JSON.parse(Buffer.from(state, 'base64').toString());
+    const redirectUri = `${this.configService.get('APP_URL')}/api/v1/platforms/oauth/tiktok/callback`;
+
+    try {
+      await this.platformsService.handleTikTokCallback(userId, code, redirectUri);
+      res.redirect(`${this.configService.get('FRONTEND_URL')}/dashboard/platforms?success=tiktok`);
+    } catch (error) {
+      res.redirect(`${this.configService.get('FRONTEND_URL')}/dashboard/platforms?error=tiktok`);
+    }
+  }
+
   @Post(':id/refresh')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()

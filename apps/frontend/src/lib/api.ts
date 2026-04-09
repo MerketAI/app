@@ -131,6 +131,8 @@ export const platformsApi = {
   getGoogleAuthUrl: () => api.get('/platforms/oauth/google'),
   getWordPressAuthUrl: (siteUrl: string) =>
     api.get('/platforms/oauth/wordpress', { params: { siteUrl } }),
+  getLinkedInAuthUrl: () => api.get('/platforms/oauth/linkedin'),
+  getTikTokAuthUrl: () => api.get('/platforms/oauth/tiktok'),
 };
 
 // Analytics API
@@ -351,6 +353,123 @@ export const aiScraperApi = {
     urlType?: 'website' | 'linkedin' | 'google_my_business' | 'facebook' | 'instagram' | 'twitter' | 'youtube' | 'unknown';
     context?: string;
   }) => api.post('/ai-scraper/scan', data),
+};
+
+// Ads API
+export const adsApi = {
+  getCampaigns: (params?: { platform?: string; status?: string; limit?: number; offset?: number }) =>
+    api.get('/ads/campaigns', { params }),
+  getCampaign: (id: string) => api.get(`/ads/campaigns/${id}`),
+  createCampaign: (data: any) => api.post('/ads/campaigns', data),
+  updateCampaign: (id: string, data: any) => api.put(`/ads/campaigns/${id}`, data),
+  launchCampaign: (id: string) => api.post(`/ads/campaigns/${id}/launch`),
+  pauseCampaign: (id: string) => api.post(`/ads/campaigns/${id}/pause`),
+  resumeCampaign: (id: string) => api.post(`/ads/campaigns/${id}/resume`),
+  deleteCampaign: (id: string) => api.delete(`/ads/campaigns/${id}`),
+  getCampaignMetrics: (id: string, params?: { startDate?: string; endDate?: string }) =>
+    api.get(`/ads/campaigns/${id}/metrics`, { params }),
+  syncMetrics: (id: string) => api.post(`/ads/campaigns/${id}/sync`),
+  getSuggestions: () => api.get('/ads/suggestions'),
+};
+
+// Leads / CRM API
+export const leadsApi = {
+  getLeads: (params?: { stage?: string; source?: string; search?: string; limit?: number; offset?: number }) =>
+    api.get('/leads', { params }),
+  getLead: (id: string) => api.get(`/leads/${id}`),
+  createLead: (data: any) => api.post('/leads', data),
+  updateLead: (id: string, data: any) => api.put(`/leads/${id}`, data),
+  deleteLead: (id: string) => api.delete(`/leads/${id}`),
+  changeStage: (id: string, data: { stage: string; reason?: string }) =>
+    api.post(`/leads/${id}/stage`, data),
+  addNote: (id: string, data: { content: string }) =>
+    api.post(`/leads/${id}/notes`, data),
+  getActivities: (id: string, params?: { limit?: number; offset?: number }) =>
+    api.get(`/leads/${id}/activities`, { params }),
+  getStats: () => api.get('/leads/stats'),
+  importLeads: (data: { leads: any[] }) => api.post('/leads/import', data),
+};
+
+// Email Marketing API
+export const emailApi = {
+  // Lists
+  getLists: () => api.get('/email/lists'),
+  createList: (data: { name: string; description?: string }) => api.post('/email/lists', data),
+  updateList: (id: string, data: any) => api.put(`/email/lists/${id}`, data),
+  deleteList: (id: string) => api.delete(`/email/lists/${id}`),
+  // Contacts
+  getContacts: (listId: string) => api.get(`/email/lists/${listId}/contacts`),
+  addContact: (data: { listId: string; email: string; name?: string }) => api.post('/email/contacts', data),
+  importContacts: (data: { listId: string; contacts: any[] }) => api.post('/email/contacts/import', data),
+  deleteContact: (id: string) => api.delete(`/email/contacts/${id}`),
+  // Campaigns
+  getCampaigns: (params?: { status?: string }) => api.get('/email/campaigns', { params }),
+  getCampaign: (id: string) => api.get(`/email/campaigns/${id}`),
+  createCampaign: (data: any) => api.post('/email/campaigns', data),
+  updateCampaign: (id: string, data: any) => api.put(`/email/campaigns/${id}`, data),
+  deleteCampaign: (id: string) => api.delete(`/email/campaigns/${id}`),
+  sendCampaign: (id: string) => api.post(`/email/campaigns/${id}/send`),
+  sendTestEmail: (id: string, data: { email: string }) => api.post(`/email/campaigns/${id}/test`, data),
+  // Sequences
+  getSequences: () => api.get('/email/sequences'),
+  createSequence: (data: any) => api.post('/email/sequences', data),
+  updateSequence: (id: string, data: any) => api.put(`/email/sequences/${id}`, data),
+  deleteSequence: (id: string) => api.delete(`/email/sequences/${id}`),
+  activateSequence: (id: string) => api.post(`/email/sequences/${id}/activate`),
+  pauseSequence: (id: string) => api.post(`/email/sequences/${id}/pause`),
+  // Templates
+  getTemplates: () => api.get('/email/templates'),
+};
+
+// Design / Flyer API
+export const designApi = {
+  getDesigns: (params?: { category?: string; limit?: number; offset?: number }) =>
+    api.get('/designs', { params }),
+  getDesign: (id: string) => api.get(`/designs/${id}`),
+  generateDesign: (data: { prompt: string; category?: string; sizePreset?: string; style?: string; businessContext?: string }) =>
+    api.post('/designs/generate', data),
+  updateDesign: (id: string, data: any) => api.put(`/designs/${id}`, data),
+  deleteDesign: (id: string) => api.delete(`/designs/${id}`),
+  renderDesign: (id: string, data?: { format?: string; quality?: number }) =>
+    api.post(`/designs/${id}/render`, data, { responseType: 'blob' }),
+  duplicateDesign: (id: string) => api.post(`/designs/${id}/duplicate`),
+  getPresets: () => api.get('/designs/presets'),
+  getTemplates: () => api.get('/designs/templates'),
+};
+
+// Video API
+export const videoApi = {
+  getProjects: (params?: { type?: string; status?: string; limit?: number; offset?: number }) =>
+    api.get('/videos', { params }),
+  getProject: (id: string) => api.get(`/videos/${id}`),
+  createProject: (data: { name: string; type: string; provider?: string; prompt?: string; scriptContent?: string; settings?: string }) =>
+    api.post('/videos', data),
+  updateProject: (id: string, data: any) => api.put(`/videos/${id}`, data),
+  deleteProject: (id: string) => api.delete(`/videos/${id}`),
+  generateVideo: (id: string) => api.post(`/videos/${id}/generate`),
+  checkStatus: (id: string) => api.get(`/videos/${id}/status`),
+  regenerateVideo: (id: string) => api.post(`/videos/${id}/regenerate`),
+  getProviders: () => api.get('/videos/providers'),
+};
+
+// Trends API
+export const trendsApi = {
+  getTrends: (params?: { category?: string; region?: string; limit?: number }) =>
+    api.get('/trends', { params }),
+  getIndustryTrends: () => api.get('/trends/industry'),
+  getContentSuggestions: () => api.get('/trends/suggestions'),
+  syncTrends: () => api.post('/trends/sync'),
+};
+
+// Google Analytics API (extension of analytics)
+export const gaApi = {
+  getProperties: () => api.get('/analytics/ga/properties'),
+  getDashboard: (propertyId: string, startDate: string, endDate: string) =>
+    api.get('/analytics/ga/dashboard', { params: { propertyId, startDate, endDate } }),
+  getTrafficSources: (propertyId: string, startDate: string, endDate: string) =>
+    api.get('/analytics/ga/traffic-sources', { params: { propertyId, startDate, endDate } }),
+  syncAnalytics: (propertyId: string) =>
+    api.post('/analytics/ga/sync', { propertyId }),
 };
 
 // Upload API

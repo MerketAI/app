@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SubscriptionsService } from '../subscriptions/subscriptions.service';
-const Platform = { INSTAGRAM: 'INSTAGRAM', FACEBOOK: 'FACEBOOK', WORDPRESS: 'WORDPRESS' } as const;
+const Platform = { INSTAGRAM: 'INSTAGRAM', FACEBOOK: 'FACEBOOK', WORDPRESS: 'WORDPRESS', LINKEDIN: 'LINKEDIN', TIKTOK: 'TIKTOK' } as const;
 const ContentStatus = { DRAFT: 'DRAFT', READY: 'READY', SCHEDULED: 'SCHEDULED', PUBLISHING: 'PUBLISHING', PUBLISHED: 'PUBLISHED', FAILED: 'FAILED' } as const;
 const ContentType = { INSTAGRAM_IMAGE: 'INSTAGRAM_IMAGE', INSTAGRAM_CAROUSEL: 'INSTAGRAM_CAROUSEL', INSTAGRAM_REEL: 'INSTAGRAM_REEL', INSTAGRAM_STORY: 'INSTAGRAM_STORY', FACEBOOK_IMAGE: 'FACEBOOK_IMAGE', FACEBOOK_VIDEO: 'FACEBOOK_VIDEO', FACEBOOK_LINK: 'FACEBOOK_LINK', BLOG_POST: 'BLOG_POST' } as const;
 type ContentType = typeof ContentType[keyof typeof ContentType];
@@ -77,6 +77,12 @@ export class PublishingService {
           break;
         case Platform.WORDPRESS:
           result = await this.publishToWordPress(content, connection);
+          break;
+        case Platform.LINKEDIN:
+          result = await this.publishToLinkedIn(content, connection);
+          break;
+        case Platform.TIKTOK:
+          result = await this.publishToTikTok(content, connection);
           break;
         default:
           throw new BadRequestException(`Publishing to ${connection.platform} is not supported yet`);
@@ -269,6 +275,138 @@ export class PublishingService {
         success: true,
         platformPostId: data.ID?.toString(),
         platformPostUrl: data.URL,
+      };
+    } catch (error) {
+      return { success: false, error: (error as Error).message };
+    }
+  }
+
+  async publishToLinkedIn(content: any, connection: any): Promise<PublishResult> {
+    const accessToken = connection.accessToken;
+    const authorId = connection.accountId;
+
+    try {
+      const text = content.caption || content.body || '';
+      const hasMedia = content.mediaUrls?.length > 0;
+
+      const shareContent: any = {
+        shareCommentary: {
+          text: text.substring(0, 3000), // LinkedIn character limit
+        },
+        shareMediaCategory: hasMedia ? 'IMAGE' : 'NONE',
+      };
+
+      if (hasMedia) {
+        shareContent.media = content.mediaUrls.slice(0, 9).map((url: string) => ({
+          status: 'READY',
+          originalUrl: url,
+          description: {
+            text: content.title || '',
+          },
+        }));
+      }
+
+      const postBody = {
+        author: `urn:li:person:${authorId}`,
+        lifecycleState: 'PUBLISHED',
+        specificContent: {
+          'com.linkedin.ugc.ShareContent': shareContent,
+        },
+        visibility: {
+          'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC',
+        },
+      };
+
+      const response = await fetch('https://api.linkedin.com/v2/ugcPosts', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+          'X-Restli-Protocol-Version': '2.0.0',
+        },
+        body: JSON.stringify(postBody),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || data.status >= 400) {
+        return {
+          success: false,
+          error: data.message || data.errorDetails?.[0]?.message || 'LinkedIn publishing failed',
+        };
+      }
+
+      const postId = data.id || response.headers.get('x-restli-id') || '';
+      const postUrn = postId.replace('urn:li:share:', '');
+      const postUrl = `https://www.linkedin.com/feed/update/${postId}`;
+
+      return {
+        success: true,
+        platformPostId: postUrn,
+        platformPostUrl: postUrl,
+      };
+    } catch (error) {
+      return { success: false, error: (error as Error).message };
+    }
+  }
+
+  async publishToTikTok(content: any, connection: any): Promise<PublishResult> {
+    const accessToken = connection.accessToken;
+
+    try {
+      const mediaUrl = content.mediaUrls?.[0];
+      if (!mediaUrl) {
+        return { success: false, error: 'TikTok requires a video URL to publish' };
+      }
+
+      const caption = content.caption || content.title || '';
+      const hashtags = content.hashtags?.length
+        ? content.hashtags.map((h: string) => `#${h.replace('#', '')}`).join(' ')
+        : '';
+      const fullCaption = `${caption}${hashtags ? '\n\n' + hashtags : ''}`.substring(0, 2200);
+
+      // Initialize content posting using TikTok Content Posting API
+      const initResponse = await fetch(
+        'https://open.tiktokapis.com/v2/post/publish/content/init/',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json; charset=UTF-8',
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({
+            post_info: {
+              title: fullCaption,
+              privacy_level: 'PUBLIC_TO_EVERYONE',
+              disable_duet: false,
+              disable_comment: false,
+              disable_stitch: false,
+            },
+            source_info: {
+              source: 'PULL_FROM_URL',
+              video_url: mediaUrl,
+            },
+          }),
+        },
+      );
+
+      const initData = await initResponse.json();
+
+      if (initData.error?.code) {
+        return {
+          success: false,
+          error: initData.error?.message || `TikTok API error: ${initData.error?.code}`,
+        };
+      }
+
+      const publishId = initData.data?.publish_id || '';
+
+      // TikTok processes the video asynchronously
+      // Return the publish_id for status tracking
+      return {
+        success: true,
+        platformPostId: publishId,
+        platformPostUrl: `https://www.tiktok.com/@${connection.accountName}`,
       };
     } catch (error) {
       return { success: false, error: (error as Error).message };

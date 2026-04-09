@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CredentialsService } from '../credentials/credentials.service';
-const Platform = { INSTAGRAM: 'INSTAGRAM', FACEBOOK: 'FACEBOOK', GOOGLE_ADS: 'GOOGLE_ADS', GOOGLE_MY_BUSINESS: 'GOOGLE_MY_BUSINESS', WORDPRESS: 'WORDPRESS' } as const;
+const Platform = { INSTAGRAM: 'INSTAGRAM', FACEBOOK: 'FACEBOOK', GOOGLE_ADS: 'GOOGLE_ADS', GOOGLE_MY_BUSINESS: 'GOOGLE_MY_BUSINESS', WORDPRESS: 'WORDPRESS', LINKEDIN: 'LINKEDIN', TIKTOK: 'TIKTOK' } as const;
 const ConnectionStatus = { CONNECTED: 'CONNECTED', DISCONNECTED: 'DISCONNECTED', EXPIRED: 'EXPIRED', ERROR: 'ERROR' } as const;
 
 interface OAuthTokenResponse {
@@ -273,6 +273,174 @@ export class PlatformsService {
     return { connection };
   }
 
+  // LinkedIn OAuth
+  async getLinkedInAuthUrl(redirectUri: string, state: string) {
+    const clientId = await this.credentialsService.get('LINKEDIN_CLIENT_ID');
+    const scopes = [
+      'w_member_social',
+      'r_liteprofile',
+      'openid',
+      'profile',
+      'email',
+    ].join(' ');
+
+    return `https://www.linkedin.com/oauth/v2/authorization?response_type=code&client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scopes)}&state=${state}`;
+  }
+
+  async handleLinkedInCallback(userId: string, code: string, redirectUri: string) {
+    const clientId = await this.credentialsService.get('LINKEDIN_CLIENT_ID');
+    const clientSecret = await this.credentialsService.get('LINKEDIN_CLIENT_SECRET');
+
+    // Exchange code for access token
+    const tokenResponse = await fetch('https://www.linkedin.com/oauth/v2/accessToken', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'authorization_code',
+        code,
+        client_id: clientId!,
+        client_secret: clientSecret!,
+        redirect_uri: redirectUri,
+      }),
+    });
+
+    const tokenData: OAuthTokenResponse = await tokenResponse.json();
+
+    if (!tokenData.access_token) {
+      throw new BadRequestException('Failed to obtain LinkedIn access token');
+    }
+
+    // Get user profile info using OpenID userinfo endpoint
+    const profileResponse = await fetch('https://api.linkedin.com/v2/userinfo', {
+      headers: { Authorization: `Bearer ${tokenData.access_token}` },
+    });
+
+    const profileData = await profileResponse.json();
+
+    const accountId = profileData.sub || profileData.id || '';
+    const accountName = profileData.name || `${profileData.given_name || ''} ${profileData.family_name || ''}`.trim() || 'LinkedIn User';
+
+    const connection = await this.prisma.platformConnection.upsert({
+      where: {
+        userId_platform_accountId: {
+          userId,
+          platform: Platform.LINKEDIN,
+          accountId,
+        },
+      },
+      update: {
+        accessToken: tokenData.access_token,
+        refreshToken: tokenData.refresh_token || null,
+        tokenExpiry: tokenData.expires_in
+          ? new Date(Date.now() + tokenData.expires_in * 1000)
+          : new Date(Date.now() + 60 * 24 * 60 * 60 * 1000), // Default 60 days
+        status: ConnectionStatus.CONNECTED,
+        accountName,
+        scopes: JSON.stringify(['w_member_social', 'r_liteprofile', 'openid', 'profile', 'email']),
+      },
+      create: {
+        userId,
+        platform: Platform.LINKEDIN,
+        accountId,
+        accountName,
+        accessToken: tokenData.access_token,
+        refreshToken: tokenData.refresh_token || null,
+        tokenExpiry: tokenData.expires_in
+          ? new Date(Date.now() + tokenData.expires_in * 1000)
+          : new Date(Date.now() + 60 * 24 * 60 * 60 * 1000),
+        scopes: JSON.stringify(['w_member_social', 'r_liteprofile', 'openid', 'profile', 'email']),
+        metadata: JSON.stringify({ linkedInId: accountId, email: profileData.email }),
+      },
+    });
+
+    return { connection };
+  }
+
+  // TikTok OAuth
+  async getTikTokAuthUrl(redirectUri: string, state: string) {
+    const clientKey = await this.credentialsService.get('TIKTOK_CLIENT_KEY');
+    const scopes = [
+      'user.info.basic',
+      'video.publish',
+      'video.upload',
+    ].join(',');
+
+    return `https://www.tiktok.com/v2/auth/authorize/?client_key=${clientKey}&response_type=code&scope=${encodeURIComponent(scopes)}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}`;
+  }
+
+  async handleTikTokCallback(userId: string, code: string, redirectUri: string) {
+    const clientKey = await this.credentialsService.get('TIKTOK_CLIENT_KEY');
+    const clientSecret = await this.credentialsService.get('TIKTOK_CLIENT_SECRET');
+
+    // Exchange code for access token
+    const tokenResponse = await fetch('https://open.tiktokapis.com/v2/oauth/token/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_key: clientKey!,
+        client_secret: clientSecret!,
+        code,
+        grant_type: 'authorization_code',
+        redirect_uri: redirectUri,
+      }),
+    });
+
+    const tokenData = await tokenResponse.json();
+
+    if (!tokenData.access_token) {
+      throw new BadRequestException('Failed to obtain TikTok access token');
+    }
+
+    // Get user info
+    const userResponse = await fetch(
+      'https://open.tiktokapis.com/v2/user/info/?fields=open_id,union_id,avatar_url,display_name',
+      {
+        headers: { Authorization: `Bearer ${tokenData.access_token}` },
+      },
+    );
+
+    const userData = await userResponse.json();
+    const userInfo = userData.data?.user || {};
+
+    const accountId = tokenData.open_id || userInfo.open_id || '';
+    const accountName = userInfo.display_name || 'TikTok User';
+
+    const connection = await this.prisma.platformConnection.upsert({
+      where: {
+        userId_platform_accountId: {
+          userId,
+          platform: Platform.TIKTOK,
+          accountId,
+        },
+      },
+      update: {
+        accessToken: tokenData.access_token,
+        refreshToken: tokenData.refresh_token || null,
+        tokenExpiry: tokenData.expires_in
+          ? new Date(Date.now() + tokenData.expires_in * 1000)
+          : new Date(Date.now() + 24 * 60 * 60 * 1000), // Default 24 hours
+        status: ConnectionStatus.CONNECTED,
+        accountName,
+        scopes: JSON.stringify(['user.info.basic', 'video.publish', 'video.upload']),
+      },
+      create: {
+        userId,
+        platform: Platform.TIKTOK,
+        accountId,
+        accountName,
+        accessToken: tokenData.access_token,
+        refreshToken: tokenData.refresh_token || null,
+        tokenExpiry: tokenData.expires_in
+          ? new Date(Date.now() + tokenData.expires_in * 1000)
+          : new Date(Date.now() + 24 * 60 * 60 * 1000),
+        scopes: JSON.stringify(['user.info.basic', 'video.publish', 'video.upload']),
+        metadata: JSON.stringify({ openId: accountId, avatarUrl: userInfo.avatar_url }),
+      },
+    });
+
+    return { connection };
+  }
+
   async refreshToken(connectionId: string) {
     const connection = await this.prisma.platformConnection.findUnique({
       where: { id: connectionId },
@@ -287,6 +455,10 @@ export class PlatformsService {
       case Platform.GOOGLE_ADS:
       case Platform.GOOGLE_MY_BUSINESS:
         return this.refreshGoogleToken(connection);
+      case Platform.LINKEDIN:
+        return this.refreshLinkedInToken(connection);
+      case Platform.TIKTOK:
+        return this.refreshTikTokToken(connection);
       default:
         throw new BadRequestException('Token refresh not supported for this platform');
     }
@@ -328,6 +500,80 @@ export class PlatformsService {
     });
   }
 
+  private async refreshLinkedInToken(connection: any) {
+    const clientId = await this.credentialsService.get('LINKEDIN_CLIENT_ID');
+    const clientSecret = await this.credentialsService.get('LINKEDIN_CLIENT_SECRET');
+
+    const response = await fetch('https://www.linkedin.com/oauth/v2/accessToken', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'refresh_token',
+        refresh_token: connection.refreshToken,
+        client_id: clientId!,
+        client_secret: clientSecret!,
+      }),
+    });
+
+    const data: OAuthTokenResponse = await response.json();
+
+    if (!data.access_token) {
+      await this.prisma.platformConnection.update({
+        where: { id: connection.id },
+        data: { status: ConnectionStatus.EXPIRED },
+      });
+      throw new BadRequestException('LinkedIn token refresh failed');
+    }
+
+    return this.prisma.platformConnection.update({
+      where: { id: connection.id },
+      data: {
+        accessToken: data.access_token,
+        refreshToken: data.refresh_token || connection.refreshToken,
+        tokenExpiry: data.expires_in
+          ? new Date(Date.now() + data.expires_in * 1000)
+          : null,
+      },
+    });
+  }
+
+  private async refreshTikTokToken(connection: any) {
+    const clientKey = await this.credentialsService.get('TIKTOK_CLIENT_KEY');
+    const clientSecret = await this.credentialsService.get('TIKTOK_CLIENT_SECRET');
+
+    const response = await fetch('https://open.tiktokapis.com/v2/oauth/token/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_key: clientKey!,
+        client_secret: clientSecret!,
+        grant_type: 'refresh_token',
+        refresh_token: connection.refreshToken,
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!data.access_token) {
+      await this.prisma.platformConnection.update({
+        where: { id: connection.id },
+        data: { status: ConnectionStatus.EXPIRED },
+      });
+      throw new BadRequestException('TikTok token refresh failed');
+    }
+
+    return this.prisma.platformConnection.update({
+      where: { id: connection.id },
+      data: {
+        accessToken: data.access_token,
+        refreshToken: data.refresh_token || connection.refreshToken,
+        tokenExpiry: data.expires_in
+          ? new Date(Date.now() + data.expires_in * 1000)
+          : null,
+      },
+    });
+  }
+
   async disconnect(userId: string, connectionId: string) {
     const connection = await this.getConnection(userId, connectionId);
 
@@ -351,6 +597,12 @@ export class PlatformsService {
           break;
         case Platform.WORDPRESS:
           await this.testWordPressConnection(connection);
+          break;
+        case Platform.LINKEDIN:
+          await this.testLinkedInConnection(connection);
+          break;
+        case Platform.TIKTOK:
+          await this.testTikTokConnection(connection);
           break;
         default:
           throw new BadRequestException('Test not implemented for this platform');
@@ -397,5 +649,22 @@ export class PlatformsService {
       },
     );
     if (!response.ok) throw new Error('WordPress connection test failed');
+  }
+
+  private async testLinkedInConnection(connection: any) {
+    const response = await fetch('https://api.linkedin.com/v2/userinfo', {
+      headers: { Authorization: `Bearer ${connection.accessToken}` },
+    });
+    if (!response.ok) throw new Error('LinkedIn connection test failed');
+  }
+
+  private async testTikTokConnection(connection: any) {
+    const response = await fetch(
+      'https://open.tiktokapis.com/v2/user/info/?fields=open_id,display_name',
+      {
+        headers: { Authorization: `Bearer ${connection.accessToken}` },
+      },
+    );
+    if (!response.ok) throw new Error('TikTok connection test failed');
   }
 }

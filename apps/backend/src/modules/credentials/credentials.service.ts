@@ -53,6 +53,27 @@ export class CredentialsService implements OnModuleInit {
       { key: 'AWS_SECRET_ACCESS_KEY', category: 'aws', description: 'AWS Secret Access Key for S3 uploads' },
       { key: 'AWS_S3_BUCKET', category: 'aws', description: 'AWS S3 Bucket name for file uploads' },
       { key: 'AWS_S3_REGION', category: 'aws', description: 'AWS S3 Region (e.g., ap-south-1)' },
+      // Google Ads
+      { key: 'GOOGLE_ADS_DEVELOPER_TOKEN', category: 'google', description: 'Google Ads Developer Token' },
+      { key: 'GOOGLE_ADS_MANAGER_ID', category: 'google', description: 'Google Ads Manager Account ID' },
+      // Email / SMTP
+      { key: 'SMTP_HOST', category: 'email', description: 'SMTP server host (e.g., smtp.gmail.com)' },
+      { key: 'SMTP_PORT', category: 'email', description: 'SMTP server port (e.g., 587)' },
+      { key: 'SMTP_USER', category: 'email', description: 'SMTP username/email' },
+      { key: 'SMTP_PASS', category: 'email', description: 'SMTP password or app password' },
+      { key: 'SMTP_FROM_EMAIL', category: 'email', description: 'Default sender email address' },
+      { key: 'SMTP_FROM_NAME', category: 'email', description: 'Default sender display name' },
+      // Video Generation
+      { key: 'HEYGEN_API_KEY', category: 'video', description: 'HeyGen API key for video generation' },
+      { key: 'RUNWAY_API_KEY', category: 'video', description: 'Runway ML API key for video generation' },
+      // LinkedIn
+      { key: 'LINKEDIN_CLIENT_ID', category: 'linkedin', description: 'LinkedIn OAuth Client ID' },
+      { key: 'LINKEDIN_CLIENT_SECRET', category: 'linkedin', description: 'LinkedIn OAuth Client Secret' },
+      // TikTok
+      { key: 'TIKTOK_CLIENT_KEY', category: 'tiktok', description: 'TikTok OAuth Client Key' },
+      { key: 'TIKTOK_CLIENT_SECRET', category: 'tiktok', description: 'TikTok OAuth Client Secret' },
+      // Trends
+      { key: 'SERPAPI_KEY', category: 'trends', description: 'SerpAPI key for Google Trends data' },
     ];
 
     for (const cred of defaults) {
