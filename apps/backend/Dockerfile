@@ -2,17 +2,17 @@ FROM node:18-alpine
 
 WORKDIR /app
 
-# Copy package files
-COPY package.json package-lock.json ./
+# Copy package.json only (no lock file in this subdirectory)
+COPY package.json ./
 
 # Install all dependencies
-RUN npm install --ignore-scripts
+RUN npm install
 
 # Copy prisma schema and generate client
 COPY prisma ./prisma
 RUN npx prisma generate
 
-# Copy source code
+# Copy all source code
 COPY . .
 
 # Build NestJS
