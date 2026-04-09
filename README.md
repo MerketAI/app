@@ -4,6 +4,52 @@ A full-stack marketing automation platform that reads a business's website, anal
 
 ---
 
+## Get MarketAI Production-Ready - Save 70% on AI Subscriptions
+
+> **Building a marketing automation platform from scratch costs $50,000-$150,000+ in development alone** - before you even pay for AI API subscriptions. MarketAI gives you the complete engine, ready to deploy.
+
+### What You Get
+
+| What's Included | Market Price | With MarketAI |
+|---|---|---|
+| Jasper AI, Claude, OpenAI, Perplexity (bundled) | $300-500/mo | **70% less through our pooled enterprise plans** |
+| Google Ads + Meta Ads automation engine | $5,000-15,000 to build | **Included** |
+| CRM + Lead management system | $3,000-8,000 to build | **Included** |
+| Email marketing with SMTP integration | $2,000-5,000 to build | **Included** |
+| AI video generation (HeyGen + Runway) | $200-400/mo per tool | **Included in bundle** |
+| AI design/flyer creator with export | $2,000-6,000 to build | **Included** |
+| Multi-platform social publishing | $3,000-8,000 to build | **Included** |
+| Website builder with AI page generation | $5,000-12,000 to build | **Included** |
+| Business intelligence + competitor analysis | $4,000-10,000 to build | **Included** |
+
+### Why Work With Me
+
+- **Full source code ownership** - no vendor lock-in, deploy anywhere
+- **Production deployment support** - I'll help you go live
+- **Custom feature development** at **$15/hour** - need a specific integration, white-label branding, or industry-specific workflow? I'll build it
+- **AI subscription bundling** - get access to all the AI services MarketAI uses at **70% below retail** through enterprise pooled plans
+
+### Use Cases
+
+- **Marketing Agencies** - Automate content creation for dozens of clients from a single dashboard
+- **SaaS Companies** - Built-in lead capture, email sequences, and ad management to grow your user base
+- **E-commerce Brands** - Product showcase videos, social posts, Google Shopping ads, and customer email flows
+- **Local Businesses** - Set it and forget it: AI reads your website, creates content, posts to social media, and captures leads
+- **White-Label Resellers** - Rebrand MarketAI as your own platform and sell marketing automation as a service
+
+### Let's Talk
+
+| | |
+|---|---|
+| **Phone / WhatsApp** | [+91 95603 16581](tel:+919560316581) |
+| **Email** | [uxd.arjun@gmail.com](mailto:uxd.arjun@gmail.com) |
+| **Website** | [www.pluxins.com](https://www.pluxins.com) |
+| **Custom Dev Rate** | **$15/hour** - any feature, any integration |
+
+> *"Stop paying $500/month for 5 different marketing tools. Get one AI engine that does it all - and own the code."*
+
+---
+
 ## Table of Contents
 
 - [Architecture Overview](#architecture-overview)
