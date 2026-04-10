@@ -22,7 +22,14 @@ import {
   Clock,
   Target,
   Loader2,
+  Search,
+  Brain,
+  PenTool,
+  Megaphone,
+  UserPlus,
+  LineChart,
 } from 'lucide-react';
+import { useRef, useCallback } from 'react';
 
 // Plan type from API
 interface Plan {
@@ -185,6 +192,256 @@ const fallbackPlans: Plan[] = [
   },
 ];
 
+// Automation flow steps
+const flowSteps = [
+  {
+    icon: Search,
+    title: 'Scan Website',
+    description: 'AI reads your site, extracts brand voice, products & services',
+    color: 'from-blue-500 to-cyan-500',
+    glow: 'shadow-blue-500/20',
+  },
+  {
+    icon: Brain,
+    title: 'Analyze & Strategize',
+    description: 'Competitors, trends, audience insights & market intelligence',
+    color: 'from-purple-500 to-violet-500',
+    glow: 'shadow-purple-500/20',
+  },
+  {
+    icon: PenTool,
+    title: 'Generate Content',
+    description: 'Articles, social posts, videos, flyers, email campaigns',
+    color: 'from-orange-500 to-red-500',
+    glow: 'shadow-orange-500/20',
+  },
+  {
+    icon: Megaphone,
+    title: 'Launch Campaigns',
+    description: 'Google Ads, Meta Ads, social publishing across platforms',
+    color: 'from-pink-500 to-rose-500',
+    glow: 'shadow-pink-500/20',
+  },
+  {
+    icon: UserPlus,
+    title: 'Capture Leads',
+    description: 'CRM pipeline, lead scoring, automated follow-ups',
+    color: 'from-green-500 to-emerald-500',
+    glow: 'shadow-green-500/20',
+  },
+  {
+    icon: LineChart,
+    title: 'Track & Optimize',
+    description: 'Analytics, ROI tracking, AI-powered optimization',
+    color: 'from-amber-500 to-yellow-500',
+    glow: 'shadow-amber-500/20',
+  },
+];
+
+function AutomationFlowSection() {
+  const sectionRef = useRef<HTMLElement>(null);
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsVisible(true);
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.15 }
+    );
+
+    if (sectionRef.current) {
+      observer.observe(sectionRef.current);
+    }
+
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <section
+      ref={sectionRef}
+      className="relative py-24 lg:py-32 bg-gray-950 overflow-hidden"
+    >
+      {/* Background effects */}
+      <div className="absolute inset-0">
+        <div className="absolute inset-0 bg-grid-pattern opacity-5" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-orange-500/5 rounded-full blur-3xl" />
+        <div className="absolute top-0 left-0 w-[400px] h-[400px] bg-blue-500/5 rounded-full blur-3xl" />
+        <div className="absolute bottom-0 right-0 w-[400px] h-[400px] bg-purple-500/5 rounded-full blur-3xl" />
+      </div>
+
+      <div className="container mx-auto px-4 lg:px-8 relative z-10">
+        {/* Section Header */}
+        <div className={`text-center mb-16 lg:mb-20 transition-all duration-700 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-orange-500/10 border border-orange-500/20 mb-6">
+            <Zap className="w-4 h-4 text-orange-400" />
+            <span className="text-sm text-orange-400 font-medium">Fully Automated Pipeline</span>
+          </div>
+          <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-4">
+            How MarketAI <span className="bg-clip-text text-transparent bg-gradient-to-r from-orange-400 to-red-500">Automates</span> Your Marketing
+          </h2>
+          <p className="text-lg text-gray-400 max-w-2xl mx-auto">
+            From scanning your website to tracking ROI - our AI handles every step of your digital marketing pipeline
+          </p>
+        </div>
+
+        {/* Flow Diagram - Desktop */}
+        <div className="hidden lg:block relative">
+          {/* Connection Lines SVG */}
+          <svg className="absolute top-[60px] left-0 w-full h-[4px] z-0" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="lineGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stopColor="#3b82f6" />
+                <stop offset="20%" stopColor="#8b5cf6" />
+                <stop offset="40%" stopColor="#f97316" />
+                <stop offset="60%" stopColor="#ec4899" />
+                <stop offset="80%" stopColor="#22c55e" />
+                <stop offset="100%" stopColor="#f59e0b" />
+              </linearGradient>
+            </defs>
+            <line
+              x1="8.3%"
+              y1="50%"
+              x2="91.7%"
+              y2="50%"
+              stroke="url(#lineGradient)"
+              strokeWidth="2"
+              strokeDasharray="8 4"
+              className={`transition-all duration-[2s] ease-out ${isVisible ? 'opacity-60' : 'opacity-0'}`}
+              style={{
+                strokeDashoffset: isVisible ? 0 : 1000,
+              }}
+            />
+          </svg>
+
+          {/* Flowing dot animation */}
+          <div className={`absolute top-[57px] left-0 w-full h-[10px] z-[1] overflow-hidden ${isVisible ? 'opacity-100' : 'opacity-0'}`}>
+            <div
+              className="absolute w-3 h-3 rounded-full bg-orange-400 shadow-lg shadow-orange-400/50"
+              style={{
+                animation: isVisible ? 'flowDot 3s ease-in-out infinite' : 'none',
+              }}
+            />
+            <div
+              className="absolute w-3 h-3 rounded-full bg-blue-400 shadow-lg shadow-blue-400/50"
+              style={{
+                animation: isVisible ? 'flowDot 3s ease-in-out infinite 1s' : 'none',
+              }}
+            />
+            <div
+              className="absolute w-3 h-3 rounded-full bg-purple-400 shadow-lg shadow-purple-400/50"
+              style={{
+                animation: isVisible ? 'flowDot 3s ease-in-out infinite 2s' : 'none',
+              }}
+            />
+          </div>
+
+          {/* Flow Nodes */}
+          <div className="grid grid-cols-6 gap-4">
+            {flowSteps.map((step, index) => (
+              <div
+                key={step.title}
+                className={`relative flex flex-col items-center text-center group transition-all duration-700 ${
+                  isVisible
+                    ? 'opacity-100 translate-y-0'
+                    : 'opacity-0 translate-y-12'
+                }`}
+                style={{
+                  transitionDelay: isVisible ? `${index * 200}ms` : '0ms',
+                }}
+              >
+                {/* Step Number */}
+                <div className="absolute -top-2 -right-1 w-6 h-6 rounded-full bg-gray-800 border border-gray-700 flex items-center justify-center z-10">
+                  <span className="text-xs font-bold text-gray-400">{index + 1}</span>
+                </div>
+
+                {/* Icon Circle */}
+                <div className={`relative w-[120px] h-[120px] rounded-2xl bg-gradient-to-br ${step.color} p-[2px] mb-4 group-hover:scale-110 transition-transform duration-300`}>
+                  <div className="w-full h-full rounded-2xl bg-gray-950 flex items-center justify-center">
+                    <step.icon className="w-10 h-10 text-white" />
+                  </div>
+                  {/* Glow effect */}
+                  <div className={`absolute inset-0 rounded-2xl bg-gradient-to-br ${step.color} opacity-0 group-hover:opacity-20 blur-xl transition-opacity duration-300`} />
+                </div>
+
+                {/* Text */}
+                <h3 className="text-white font-semibold text-sm mb-1 group-hover:text-orange-400 transition-colors">
+                  {step.title}
+                </h3>
+                <p className="text-gray-500 text-xs leading-relaxed px-1 group-hover:text-gray-400 transition-colors">
+                  {step.description}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Flow Diagram - Mobile (Vertical) */}
+        <div className="lg:hidden space-y-0">
+          {flowSteps.map((step, index) => (
+            <div key={step.title} className="relative">
+              <div
+                className={`flex items-start gap-4 py-6 transition-all duration-700 ${
+                  isVisible ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-8'
+                }`}
+                style={{
+                  transitionDelay: isVisible ? `${index * 150}ms` : '0ms',
+                }}
+              >
+                {/* Left: Number + Icon */}
+                <div className="flex flex-col items-center flex-shrink-0">
+                  <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${step.color} p-[2px]`}>
+                    <div className="w-full h-full rounded-xl bg-gray-950 flex items-center justify-center">
+                      <step.icon className="w-6 h-6 text-white" />
+                    </div>
+                  </div>
+                  {/* Vertical connector */}
+                  {index < flowSteps.length - 1 && (
+                    <div className="w-[2px] h-8 bg-gradient-to-b from-gray-700 to-transparent mt-2" />
+                  )}
+                </div>
+
+                {/* Right: Text */}
+                <div className="pt-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-xs font-mono text-gray-600">0{index + 1}</span>
+                    <h3 className="text-white font-semibold">{step.title}</h3>
+                  </div>
+                  <p className="text-gray-500 text-sm">{step.description}</p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Bottom CTA */}
+        <div className={`text-center mt-16 transition-all duration-700 delay-[1200ms] ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
+          <p className="text-gray-500 mb-4">All running on autopilot. No marketing expertise needed.</p>
+          <Link href="/register">
+            <Button size="lg" className="bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white px-8 py-3 rounded-full shadow-lg shadow-orange-500/25">
+              Start Automating Now
+              <ArrowRight className="ml-2 w-4 h-4" />
+            </Button>
+          </Link>
+        </div>
+      </div>
+
+      {/* CSS for flowing dot animation */}
+      <style jsx>{`
+        @keyframes flowDot {
+          0% { left: 5%; opacity: 0; }
+          10% { opacity: 1; }
+          90% { opacity: 1; }
+          100% { left: 95%; opacity: 0; }
+        }
+      `}</style>
+    </section>
+  );
+}
+
 export default function Home() {
   const [plans, setPlans] = useState<Plan[]>(fallbackPlans);
   const [isLoadingPlans, setIsLoadingPlans] = useState(true);
@@ -271,6 +528,9 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      {/* How It Works - Animated Flow Diagram */}
+      <AutomationFlowSection />
 
       {/* Logo Marquee */}
       <section className="py-12 border-y border-gray-100 bg-gray-50/50">
