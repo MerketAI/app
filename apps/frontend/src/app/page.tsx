@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Navbar } from '@/components/landing/navbar';
 import { Footer } from '@/components/landing/footer';
+import { IntegrationsCanvasSection } from '@/components/landing/integrations-canvas';
+import { PlatformWorkflowSection } from '@/components/landing/platform-workflows';
 import { publicApi } from '@/lib/api';
 import {
   Sparkles,
@@ -442,8 +444,8 @@ function AutomationFlowSection() {
   );
 }
 
-// Integration tools data
-const integrationTools = [
+// Old inline integration tools data (superseded by imported components)
+const _legacyIntegrationTools = [
   // CRMs
   { name: 'Salesforce', category: 'CRM', color: '#00A1E0', x: 8, y: 15 },
   { name: 'HubSpot', category: 'CRM', color: '#FF7A59', x: 22, y: 8 },
@@ -471,7 +473,7 @@ const integrationTools = [
   { name: 'Slack', category: 'Comms', color: '#4A154B', x: 78, y: 35 },
 ];
 
-function IntegrationsCanvasSection() {
+function _LegacyIntegrationsCanvasSection() {
   const sectionRef = useRef<HTMLElement>(null);
   const [isVisible, setIsVisible] = useState(false);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
@@ -711,7 +713,7 @@ const platformWorkflows = [
   },
 ];
 
-function PlatformWorkflowSection() {
+function _LegacyPlatformWorkflowSection() {
   const sectionRef = useRef<HTMLElement>(null);
   const [isVisible, setIsVisible] = useState(false);
   const [activePlatform, setActivePlatform] = useState(0);
