@@ -442,6 +442,403 @@ function AutomationFlowSection() {
   );
 }
 
+// Integration tools data
+const integrationTools = [
+  // CRMs
+  { name: 'Salesforce', category: 'CRM', color: '#00A1E0', x: 8, y: 15 },
+  { name: 'HubSpot', category: 'CRM', color: '#FF7A59', x: 22, y: 8 },
+  { name: 'Zoho', category: 'CRM', color: '#D32F2F', x: 15, y: 30 },
+  // Marketing
+  { name: 'Mailchimp', category: 'Email', color: '#FFE01B', x: 35, y: 12 },
+  { name: 'SendGrid', category: 'Email', color: '#1A82E2', x: 42, y: 28 },
+  // Ads
+  { name: 'Google Ads', category: 'Ads', color: '#4285F4', x: 55, y: 8 },
+  { name: 'Meta Ads', category: 'Ads', color: '#0668E1', x: 62, y: 22 },
+  // Social
+  { name: 'Instagram', category: 'Social', color: '#E4405F', x: 75, y: 10 },
+  { name: 'LinkedIn', category: 'Social', color: '#0A66C2', x: 82, y: 25 },
+  { name: 'TikTok', category: 'Social', color: '#000000', x: 88, y: 12 },
+  // Automation
+  { name: 'Zapier', category: 'Automation', color: '#FF4A00', x: 28, y: 42 },
+  { name: 'n8n', category: 'Automation', color: '#EA4B71', x: 48, y: 45 },
+  { name: 'Make', category: 'Automation', color: '#6D00CC', x: 68, y: 42 },
+  // Analytics
+  { name: 'GA4', category: 'Analytics', color: '#E37400', x: 12, y: 48 },
+  { name: 'Stripe', category: 'Payment', color: '#635BFF', x: 85, y: 40 },
+  // Platforms
+  { name: 'WordPress', category: 'CMS', color: '#21759B', x: 38, y: 32 },
+  { name: 'Shopify', category: 'Commerce', color: '#96BF48', x: 58, y: 35 },
+  { name: 'Slack', category: 'Comms', color: '#4A154B', x: 78, y: 35 },
+];
+
+function IntegrationsCanvasSection() {
+  const sectionRef = useRef<HTMLElement>(null);
+  const [isVisible, setIsVisible] = useState(false);
+  const [activeCategory, setActiveCategory] = useState<string | null>(null);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) { setIsVisible(true); observer.disconnect(); } },
+      { threshold: 0.1 }
+    );
+    if (sectionRef.current) observer.observe(sectionRef.current);
+    return () => observer.disconnect();
+  }, []);
+
+  const categories = ['CRM', 'Email', 'Ads', 'Social', 'Automation', 'Analytics', 'CMS', 'Commerce', 'Payment', 'Comms'];
+  const categoryColors: Record<string, string> = {
+    CRM: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+    Email: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
+    Ads: 'bg-green-500/20 text-green-400 border-green-500/30',
+    Social: 'bg-pink-500/20 text-pink-400 border-pink-500/30',
+    Automation: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
+    Analytics: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
+    CMS: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30',
+    Commerce: 'bg-lime-500/20 text-lime-400 border-lime-500/30',
+    Payment: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
+    Comms: 'bg-violet-500/20 text-violet-400 border-violet-500/30',
+  };
+
+  return (
+    <section ref={sectionRef} className="relative py-24 lg:py-32 bg-[#0a0a0f] overflow-hidden">
+      {/* Canvas grid background */}
+      <div className="absolute inset-0" style={{
+        backgroundImage: 'radial-gradient(circle at 1px 1px, rgba(255,255,255,0.03) 1px, transparent 0)',
+        backgroundSize: '40px 40px',
+      }} />
+
+      <div className="container mx-auto px-4 lg:px-8 relative z-10">
+        {/* Header */}
+        <div className={`text-center mb-12 transition-all duration-700 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-purple-500/10 border border-purple-500/20 mb-6">
+            <Globe className="w-4 h-4 text-purple-400" />
+            <span className="text-sm text-purple-400 font-medium">Open Ecosystem</span>
+          </div>
+          <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-4">
+            Plug Into Your <span className="bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-pink-500">Favorite Tools</span>
+          </h2>
+          <p className="text-lg text-gray-400 max-w-2xl mx-auto">
+            Connect with 50+ CRMs, platforms, and tools via APIs. Build custom workflows like n8n - automate everything.
+          </p>
+        </div>
+
+        {/* Category Filter */}
+        <div className={`flex flex-wrap justify-center gap-2 mb-12 transition-all duration-700 delay-200 ${isVisible ? 'opacity-100' : 'opacity-0'}`}>
+          <button
+            onClick={() => setActiveCategory(null)}
+            className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+              !activeCategory ? 'bg-white/10 text-white border-white/20' : 'bg-transparent text-gray-500 border-gray-800 hover:border-gray-600'
+            }`}
+          >
+            All
+          </button>
+          {['CRM', 'Ads', 'Social', 'Automation', 'Email'].map((cat) => (
+            <button
+              key={cat}
+              onClick={() => setActiveCategory(activeCategory === cat ? null : cat)}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+                activeCategory === cat ? categoryColors[cat] : 'bg-transparent text-gray-500 border-gray-800 hover:border-gray-600'
+              }`}
+            >
+              {cat}
+            </button>
+          ))}
+        </div>
+
+        {/* Canvas - Tool Nodes */}
+        <div className={`relative w-full aspect-[2.5/1] md:aspect-[3/1] rounded-2xl border border-gray-800/50 bg-gray-950/50 backdrop-blur overflow-hidden transition-all duration-700 delay-300 ${isVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`}>
+          {/* Center MarketAI Hub */}
+          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-20">
+            <div className="relative">
+              <div className="w-20 h-20 md:w-24 md:h-24 rounded-2xl bg-gradient-to-br from-orange-500 to-red-500 flex items-center justify-center shadow-2xl shadow-orange-500/30">
+                <Sparkles className="w-8 h-8 md:w-10 md:h-10 text-white" />
+              </div>
+              <div className="absolute -bottom-7 left-1/2 -translate-x-1/2 whitespace-nowrap">
+                <span className="text-xs font-bold text-orange-400">MarketAI</span>
+              </div>
+              {/* Pulse rings */}
+              <div className="absolute inset-0 rounded-2xl border-2 border-orange-500/30 animate-ping" style={{ animationDuration: '3s' }} />
+              <div className="absolute -inset-4 rounded-3xl border border-orange-500/10 animate-ping" style={{ animationDuration: '4s' }} />
+            </div>
+          </div>
+
+          {/* Connection lines from center to each tool */}
+          <svg className="absolute inset-0 w-full h-full z-10 pointer-events-none">
+            {integrationTools.map((tool, i) => {
+              const isFiltered = activeCategory && tool.category !== activeCategory;
+              return (
+                <line
+                  key={`line-${i}`}
+                  x1="50%"
+                  y1="50%"
+                  x2={`${tool.x}%`}
+                  y2={`${tool.y}%`}
+                  stroke={tool.color}
+                  strokeWidth="1"
+                  strokeDasharray="4 4"
+                  className={`transition-opacity duration-500 ${isFiltered ? 'opacity-5' : 'opacity-20'}`}
+                />
+              );
+            })}
+          </svg>
+
+          {/* Tool nodes */}
+          {integrationTools.map((tool, i) => {
+            const isFiltered = activeCategory && tool.category !== activeCategory;
+            return (
+              <div
+                key={tool.name}
+                className={`absolute z-20 group transition-all duration-700 ${
+                  isVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-0'
+                } ${isFiltered ? '!opacity-10 !scale-75' : ''}`}
+                style={{
+                  left: `${tool.x}%`,
+                  top: `${tool.y}%`,
+                  transform: `translate(-50%, -50%) ${isVisible && !isFiltered ? 'scale(1)' : 'scale(0)'}`,
+                  transitionDelay: isVisible ? `${300 + i * 80}ms` : '0ms',
+                }}
+              >
+                <div className="relative cursor-pointer">
+                  <div
+                    className="w-11 h-11 md:w-14 md:h-14 rounded-xl flex items-center justify-center border border-gray-700/50 bg-gray-900/80 backdrop-blur-sm group-hover:scale-125 group-hover:border-gray-500 transition-all duration-300 shadow-lg"
+                    style={{ boxShadow: `0 0 20px ${tool.color}15` }}
+                  >
+                    <span className="text-[10px] md:text-xs font-bold text-gray-300 group-hover:text-white transition-colors text-center leading-tight">
+                      {tool.name.length > 8 ? tool.name.split(' ')[0] : tool.name}
+                    </span>
+                  </div>
+                  {/* Tooltip */}
+                  <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+                    <span className="text-[10px] px-2 py-1 rounded bg-gray-800 text-gray-300 border border-gray-700">
+                      {tool.name} ({tool.category})
+                    </span>
+                  </div>
+                  {/* Glow */}
+                  <div
+                    className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 blur-xl transition-opacity duration-300"
+                    style={{ backgroundColor: tool.color + '30' }}
+                  />
+                </div>
+              </div>
+            );
+          })}
+
+          {/* Floating particles */}
+          {[...Array(6)].map((_, i) => (
+            <div
+              key={`particle-${i}`}
+              className="absolute w-1 h-1 rounded-full bg-orange-400/40"
+              style={{
+                left: `${20 + i * 12}%`,
+                top: `${30 + (i % 3) * 15}%`,
+                animation: `float ${4 + i}s ease-in-out infinite`,
+                animationDelay: `${i * 0.5}s`,
+              }}
+            />
+          ))}
+        </div>
+
+        {/* Bottom info cards */}
+        <div className={`grid md:grid-cols-3 gap-4 mt-10 transition-all duration-700 delay-[800ms] ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
+          <div className="p-5 rounded-xl border border-gray-800 bg-gray-900/50 backdrop-blur">
+            <div className="w-10 h-10 rounded-lg bg-purple-500/10 flex items-center justify-center mb-3">
+              <Zap className="w-5 h-5 text-purple-400" />
+            </div>
+            <h4 className="text-white font-semibold mb-1">REST API Access</h4>
+            <p className="text-gray-500 text-sm">Full API documentation. Build custom integrations with any platform.</p>
+          </div>
+          <div className="p-5 rounded-xl border border-gray-800 bg-gray-900/50 backdrop-blur">
+            <div className="w-10 h-10 rounded-lg bg-orange-500/10 flex items-center justify-center mb-3">
+              <Target className="w-5 h-5 text-orange-400" />
+            </div>
+            <h4 className="text-white font-semibold mb-1">Workflow Builder</h4>
+            <p className="text-gray-500 text-sm">Create automated workflows like n8n. Connect triggers, actions, and conditions.</p>
+          </div>
+          <div className="p-5 rounded-xl border border-gray-800 bg-gray-900/50 backdrop-blur">
+            <div className="w-10 h-10 rounded-lg bg-green-500/10 flex items-center justify-center mb-3">
+              <Shield className="w-5 h-5 text-green-400" />
+            </div>
+            <h4 className="text-white font-semibold mb-1">Enterprise Ready</h4>
+            <p className="text-gray-500 text-sm">SSO, webhooks, custom domains. Deploy on your own infrastructure.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// Platform workflow data
+const platformWorkflows = [
+  {
+    name: 'Google',
+    icon: '🔍',
+    color: 'from-blue-500 to-green-500',
+    borderColor: 'border-blue-500/30',
+    bgColor: 'bg-blue-500/5',
+    steps: ['Search Ads Campaign', 'Keyword Targeting', 'A/B Ad Copies', 'Bid Optimization', 'Analytics Sync'],
+  },
+  {
+    name: 'Meta',
+    icon: '📘',
+    color: 'from-blue-600 to-indigo-600',
+    borderColor: 'border-blue-600/30',
+    bgColor: 'bg-blue-600/5',
+    steps: ['Audience Builder', 'Ad Creative Gen', 'Campaign Launch', 'Retargeting', 'ROAS Tracking'],
+  },
+  {
+    name: 'Instagram',
+    icon: '📸',
+    color: 'from-pink-500 to-purple-600',
+    borderColor: 'border-pink-500/30',
+    bgColor: 'bg-pink-500/5',
+    steps: ['Content Calendar', 'AI Captions', 'Hashtag Strategy', 'Auto-Post', 'Engagement Track'],
+  },
+  {
+    name: 'LinkedIn',
+    icon: '💼',
+    color: 'from-sky-600 to-blue-700',
+    borderColor: 'border-sky-600/30',
+    bgColor: 'bg-sky-600/5',
+    steps: ['B2B Targeting', 'Thought Leadership', 'Company Posts', 'Lead Gen Forms', 'Pipeline Sync'],
+  },
+  {
+    name: 'Facebook',
+    icon: '👥',
+    color: 'from-blue-500 to-blue-700',
+    borderColor: 'border-blue-500/30',
+    bgColor: 'bg-blue-500/5',
+    steps: ['Page Management', 'Post Scheduling', 'Community Engage', 'Pixel Tracking', 'Custom Audience'],
+  },
+];
+
+function PlatformWorkflowSection() {
+  const sectionRef = useRef<HTMLElement>(null);
+  const [isVisible, setIsVisible] = useState(false);
+  const [activePlatform, setActivePlatform] = useState(0);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) { setIsVisible(true); observer.disconnect(); } },
+      { threshold: 0.1 }
+    );
+    if (sectionRef.current) observer.observe(sectionRef.current);
+    return () => observer.disconnect();
+  }, []);
+
+  // Auto-rotate platforms
+  useEffect(() => {
+    if (!isVisible) return;
+    const timer = setInterval(() => {
+      setActivePlatform((p) => (p + 1) % platformWorkflows.length);
+    }, 4000);
+    return () => clearInterval(timer);
+  }, [isVisible]);
+
+  const platform = platformWorkflows[activePlatform];
+
+  return (
+    <section ref={sectionRef} className="relative py-24 lg:py-32 bg-white overflow-hidden">
+      <div className="absolute inset-0 bg-grid-pattern opacity-20" />
+
+      <div className="container mx-auto px-4 lg:px-8 relative z-10">
+        {/* Header */}
+        <div className={`text-center mb-16 transition-all duration-700 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-pink-500/10 border border-pink-500/20 mb-6">
+            <Play className="w-4 h-4 text-pink-500" />
+            <span className="text-sm text-pink-500 font-medium">Live Platform Workflows</span>
+          </div>
+          <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-gray-900 mb-4">
+            See How It Works on
+            <span className="bg-clip-text text-transparent bg-gradient-to-r from-pink-500 to-purple-600"> Every Platform</span>
+          </h2>
+          <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+            Each platform gets its own AI-powered automation pipeline. Click to explore the live workflow.
+          </p>
+        </div>
+
+        {/* Platform Tabs */}
+        <div className={`flex flex-wrap justify-center gap-3 mb-12 transition-all duration-700 delay-200 ${isVisible ? 'opacity-100' : 'opacity-0'}`}>
+          {platformWorkflows.map((p, i) => (
+            <button
+              key={p.name}
+              onClick={() => setActivePlatform(i)}
+              className={`flex items-center gap-2 px-5 py-3 rounded-xl font-medium text-sm transition-all duration-300 border ${
+                activePlatform === i
+                  ? `bg-gradient-to-r ${p.color} text-white border-transparent shadow-lg scale-105`
+                  : `bg-white text-gray-600 ${p.borderColor} hover:shadow-md hover:scale-[1.02]`
+              }`}
+            >
+              <span className="text-lg">{p.icon}</span>
+              {p.name}
+            </button>
+          ))}
+        </div>
+
+        {/* Workflow Visualization */}
+        <div className={`max-w-5xl mx-auto transition-all duration-700 delay-300 ${isVisible ? 'opacity-100' : 'opacity-0'}`}>
+          <div className={`relative p-8 md:p-12 rounded-2xl border ${platform.borderColor} ${platform.bgColor} transition-all duration-500`}>
+            {/* Platform header */}
+            <div className="flex items-center gap-3 mb-10">
+              <span className="text-3xl">{platform.icon}</span>
+              <div>
+                <h3 className="text-xl font-bold text-gray-900">{platform.name} Automation Pipeline</h3>
+                <p className="text-sm text-gray-500">AI-powered workflow running on autopilot</p>
+              </div>
+              <div className="ml-auto flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                <span className="text-xs text-green-600 font-medium">Live</span>
+              </div>
+            </div>
+
+            {/* Flow Steps */}
+            <div className="flex flex-col md:flex-row items-start md:items-center gap-3 md:gap-0">
+              {platform.steps.map((step, i) => (
+                <div key={`${platform.name}-${i}`} className="flex items-center gap-3 md:flex-1">
+                  {/* Step Node */}
+                  <div
+                    className={`flex-shrink-0 relative transition-all duration-500 ${
+                      isVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-0'
+                    }`}
+                    style={{ transitionDelay: `${500 + i * 200}ms` }}
+                  >
+                    <div className={`w-full md:w-auto px-4 py-3 rounded-xl bg-white border border-gray-200 shadow-sm hover:shadow-md hover:scale-105 transition-all duration-300 cursor-default`}>
+                      <div className="flex items-center gap-2">
+                        <div className={`w-6 h-6 rounded-full bg-gradient-to-r ${platform.color} flex items-center justify-center flex-shrink-0`}>
+                          <span className="text-white text-[10px] font-bold">{i + 1}</span>
+                        </div>
+                        <span className="text-xs md:text-sm font-medium text-gray-700 whitespace-nowrap">{step}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Arrow connector (not on last) */}
+                  {i < platform.steps.length - 1 && (
+                    <div className="hidden md:flex items-center flex-shrink-0 mx-1">
+                      <div className={`w-6 h-[2px] bg-gradient-to-r ${platform.color} opacity-40`} />
+                      <div className={`w-0 h-0 border-t-[4px] border-t-transparent border-b-[4px] border-b-transparent border-l-[6px] opacity-40`}
+                        style={{ borderLeftColor: activePlatform === 0 ? '#3b82f6' : activePlatform === 1 ? '#4f46e5' : activePlatform === 2 ? '#ec4899' : activePlatform === 3 ? '#0284c7' : '#3b82f6' }}
+                      />
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Progress bar */}
+            <div className="mt-8 h-1 rounded-full bg-gray-200 overflow-hidden">
+              <div
+                className={`h-full rounded-full bg-gradient-to-r ${platform.color} transition-all duration-[4000ms] ease-linear`}
+                style={{ width: isVisible ? '100%' : '0%' }}
+                key={activePlatform}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default function Home() {
   const [plans, setPlans] = useState<Plan[]>(fallbackPlans);
   const [isLoadingPlans, setIsLoadingPlans] = useState(true);
@@ -614,6 +1011,12 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      {/* Integrations Canvas */}
+      <IntegrationsCanvasSection />
+
+      {/* Platform Workflow Showcase */}
+      <PlatformWorkflowSection />
 
       {/* Testimonials Section */}
       <section className="py-20 lg:py-32">
