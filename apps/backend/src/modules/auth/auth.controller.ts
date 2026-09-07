@@ -26,6 +26,7 @@ import {
   SendVerificationDto,
   ForgotPasswordDto,
   ResetPasswordDto,
+  LexOriginHandoffDto,
 } from './dto';
 const AuthProvider = { GOOGLE: 'GOOGLE', FACEBOOK: 'FACEBOOK' } as const;
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -117,6 +118,19 @@ export class AuthController {
       ...req.user,
       provider: AuthProvider.GOOGLE,
     });
+  }
+
+  @Post('lexorigin')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Sign in with LexOrigin',
+    description:
+      "Exchanges a short-lived assertion minted by LexOrigin for a normal Jasper session. The user is matched by email, or created on first arrival like any other federated sign-in. Deliberately unauthenticated — the assertion's signature is the credential.",
+  })
+  @ApiResponse({ status: 200, description: 'Jasper access and refresh tokens' })
+  @ApiResponse({ status: 401, description: 'Assertion invalid, expired, or bridge not configured' })
+  async lexOriginHandoff(@Body() dto: LexOriginHandoffDto) {
+    return this.authService.handleLexOriginHandoff(dto.assertion);
   }
 
   @Get('me')

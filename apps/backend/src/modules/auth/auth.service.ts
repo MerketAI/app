@@ -1,5 +1,6 @@
 import {
   Injectable,
+  Logger,
   UnauthorizedException,
   ConflictException,
   BadRequestException,
@@ -25,6 +26,10 @@ const AuthProvider = {
   GOOGLE: 'GOOGLE',
   FACEBOOK: 'FACEBOOK',
   APPLE: 'APPLE',
+  // Business owners arriving from LexOrigin via the handoff bridge. No
+  // migration needed to add this: `authProvider` is a plain String column
+  // (schema.prisma), not a Prisma enum.
+  LEXORIGIN: 'LEXORIGIN',
 } as const;
 type AuthProvider = typeof AuthProvider[keyof typeof AuthProvider];
 
@@ -38,6 +43,7 @@ type SubscriptionTier = typeof SubscriptionTier[keyof typeof SubscriptionTier];
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
   private readonly verificationCodes: Map<string, { code: string; expiresAt: Date }> = new Map();
   private readonly resetTokens: Map<string, { userId: string; expiresAt: Date }> = new Map();
 
@@ -273,6 +279,66 @@ export class AuthService {
     });
 
     return { message: 'Password reset successfully' };
+  }
+
+  /**
+   * Exchange a LexOrigin handoff assertion for a Jasper session.
+   *
+   * LexOrigin mints a short-lived JWT for one of its business owners, signed
+   * with a secret shared only between the two services. Verifying it here is
+   * proof that LexOrigin vouches for that person, so they are treated exactly
+   * like any other federated sign-in: matched by email, or provisioned on
+   * first arrival with the same profile and starter subscription every OAuth
+   * user gets.
+   *
+   * This is a one-time handoff, not continuous SSO. Once exchanged the user
+   * holds ordinary Jasper tokens with their own lifetime, so revoking someone's
+   * LexOrigin access does not retract a Jasper session already issued. That is
+   * the accepted tradeoff of an OAuth-style bridge; true SSO would mean
+   * trusting LexOrigin's tokens on every request instead.
+   *
+   * Replay: assertions are short-lived rather than single-use, so a captured
+   * one works until it expires. That is why the TTL is minutes and why this
+   * must only be reached over TLS. Making them genuinely single-use needs a
+   * store of spent jti values — worth adding if these ever travel anywhere
+   * less controlled than a server-to-server call.
+   */
+  async handleLexOriginHandoff(assertion: string) {
+    const secret = this.configService.get<string>('LEXORIGIN_BRIDGE_SECRET');
+    if (!secret) {
+      // A configuration gap rather than a caller error — but the caller is
+      // never told which of the two it was.
+      this.logger.error('LEXORIGIN_BRIDGE_SECRET is not configured');
+      throw new UnauthorizedException('Sign-in with LexOrigin is unavailable');
+    }
+
+    let payload: { sub?: string; email?: string; name?: string };
+    try {
+      payload = this.jwtService.verify(assertion, {
+        secret,
+        issuer: 'lexorigin',
+        audience: 'jasper',
+      });
+    } catch {
+      // Covers a bad signature, a wrong issuer or audience, and an expired
+      // assertion alike. The caller learns only that it was rejected.
+      throw new UnauthorizedException('Invalid or expired LexOrigin handoff');
+    }
+
+    if (!payload.email) {
+      throw new UnauthorizedException('LexOrigin handoff is missing an email');
+    }
+
+    this.logger.log(`LexOrigin handoff accepted for ${payload.email}`);
+
+    return this.handleOAuthUser({
+      // The LexOrigin client id, kept so a Jasper user can be traced back to
+      // the business it came from.
+      providerId: payload.sub || payload.email,
+      email: payload.email.toLowerCase(),
+      name: payload.name || payload.email,
+      provider: AuthProvider.LEXORIGIN,
+    });
   }
 
   async handleOAuthUser(profile: {
