@@ -25,6 +25,13 @@ export class CredentialsService implements OnModuleInit {
       'CREDENTIALS_ENCRYPTION_KEY',
       'default-encryption-key-change-in-production-32char',
     ).slice(0, 32).padEnd(32, '0'); // Ensure 32 bytes for AES-256
+
+    if (
+      process.env.NODE_ENV === 'production' &&
+      !this.configService.get<string>('CREDENTIALS_ENCRYPTION_KEY')
+    ) {
+      throw new Error('CREDENTIALS_ENCRYPTION_KEY must be set in production.');
+    }
   }
 
   async onModuleInit() {

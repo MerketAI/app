@@ -1,5 +1,6 @@
 import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
+import { decryptTokenFields, encryptTokenFields } from '../common/utils/token-cipher.util';
 
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
@@ -9,6 +10,23 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
         ? ['query', 'info', 'warn', 'error']
         : ['error'],
     });
+
+    const secret = process.env.TOKEN_ENCRYPTION_KEY;
+    if (!secret && process.env.NODE_ENV === 'production') {
+      throw new Error('TOKEN_ENCRYPTION_KEY must be set in production.');
+    }
+    if (secret) {
+      this.$use(async (params, next) => {
+        if (params.model === 'PlatformConnection' && params.args) {
+          encryptTokenFields(params.args.data, secret);
+          encryptTokenFields(params.args.create, secret);
+          encryptTokenFields(params.args.update, secret);
+        }
+        const result = await next(params);
+        decryptTokenFields(result, secret);
+        return result;
+      });
+    }
   }
 
   async onModuleInit() {

@@ -132,3 +132,19 @@ the API cannot be used to enumerate valid keys.
 - Rotation takes effect immediately, so schedule it with the partner.
 - Send these credentials only server-to-server. They are not safe in a browser
   or mobile client — anyone holding them can act for **every** subscriber.
+
+## Connecting a subscriber's accounts
+
+`GET /api/v1/platforms/oauth/meta` and `GET /api/v1/platforms/oauth/google-drive` return `{ url }` for the subscriber to open. Pass `?returnUrl=` to bring them back to your app with `?success=meta` or `?error=meta` appended; its origin must be listed in `OAUTH_RETURN_ORIGINS`, otherwise they land on the Jasper dashboard. The OAuth `state` is signed and expires after 15 minutes.
+
+Google Drive uses the `drive.file` scope, so only files the subscriber picks are reachable: `GET /api/v1/platforms/:id/drive-token` returns a token for Google's Picker, and `POST /api/v1/platforms/:id/drive-import` with `{ fileId }` copies the file to public storage and returns its URL.
+
+## Marketing assistant
+
+| Method | Path | Purpose |
+|---|---|---|
+| `POST` | `/api/v1/agent/chat` | `{ message, conversationId?, mediaUrls? }`. Returns `{ conversationId, reply, drafts }`. One credit per message. |
+| `GET` | `/api/v1/agent/conversations` | The subscriber's recent chats. |
+| `GET` | `/api/v1/agent/conversations/:id` | One chat, as plain text turns. |
+
+The assistant reads the subscriber's business profile (`PUT /api/v1/business/profile`), searches the web for local trends, and saves posts as drafts. **It cannot publish.** Publishing is a separate, deliberate call: `POST /api/v1/publishing/:contentId/publish` with `{ connectionId }`, or `POST /api/v1/content/:id/schedule`.

@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CredentialsService } from '../credentials/credentials.service';
-const Platform = { INSTAGRAM: 'INSTAGRAM', FACEBOOK: 'FACEBOOK', GOOGLE_ADS: 'GOOGLE_ADS', GOOGLE_MY_BUSINESS: 'GOOGLE_MY_BUSINESS', WORDPRESS: 'WORDPRESS', LINKEDIN: 'LINKEDIN', TIKTOK: 'TIKTOK' } as const;
+const Platform = { INSTAGRAM: 'INSTAGRAM', FACEBOOK: 'FACEBOOK', GOOGLE_ADS: 'GOOGLE_ADS', GOOGLE_MY_BUSINESS: 'GOOGLE_MY_BUSINESS', GOOGLE_DRIVE: 'GOOGLE_DRIVE', WORDPRESS: 'WORDPRESS', LINKEDIN: 'LINKEDIN', TIKTOK: 'TIKTOK' } as const;
 const ConnectionStatus = { CONNECTED: 'CONNECTED', DISCONNECTED: 'DISCONNECTED', EXPIRED: 'EXPIRED', ERROR: 'ERROR' } as const;
 
 interface OAuthTokenResponse {
@@ -230,6 +230,79 @@ export class PlatformsService {
   }
 
   // WordPress OAuth
+  /**
+   * Google Drive. `drive.file` only reaches files the user picks in Google's Picker,
+   * so we never see the rest of their Drive, and it avoids the paid security
+   * assessment Google requires for the broader Drive scopes.
+   */
+  async getGoogleDriveAuthUrl(redirectUri: string, state: string) {
+    const clientId = await this.credentialsService.get('GOOGLE_CLIENT_ID');
+    const scopes = ['https://www.googleapis.com/auth/drive.file', 'email'].join(' ');
+
+    return `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scopes)}&state=${state}&response_type=code&access_type=offline&prompt=consent`;
+  }
+
+  async handleGoogleDriveCallback(userId: string, code: string, redirectUri: string) {
+    const clientId = await this.credentialsService.get('GOOGLE_CLIENT_ID');
+    const clientSecret = await this.credentialsService.get('GOOGLE_CLIENT_SECRET');
+
+    const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        code,
+        client_id: clientId!,
+        client_secret: clientSecret!,
+        redirect_uri: redirectUri,
+        grant_type: 'authorization_code',
+      }),
+    });
+    const tokens: OAuthTokenResponse = await tokenResponse.json();
+    if (!tokens.access_token) {
+      throw new BadRequestException('Google Drive sign-in failed');
+    }
+
+    const who = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+      headers: { Authorization: `Bearer ${tokens.access_token}` },
+    });
+    const { email } = (await who.json()) as { email?: string };
+    const accountId = email || 'google-drive';
+    const fields = {
+      accessToken: tokens.access_token,
+      tokenExpiry: tokens.expires_in ? new Date(Date.now() + tokens.expires_in * 1000) : null,
+      status: ConnectionStatus.CONNECTED,
+      accountName: email || 'Google Drive',
+    };
+
+    return this.prisma.platformConnection.upsert({
+      where: { userId_platform_accountId: { userId, platform: Platform.GOOGLE_DRIVE, accountId } },
+      update: { ...fields, ...(tokens.refresh_token ? { refreshToken: tokens.refresh_token } : {}) },
+      create: {
+        ...fields,
+        userId,
+        platform: Platform.GOOGLE_DRIVE,
+        accountId,
+        refreshToken: tokens.refresh_token,
+        scopes: JSON.stringify(['drive.file']),
+      },
+    });
+  }
+
+  /** A live Drive access token for this user's connection, refreshed when close to expiry. */
+  async getDriveAccessToken(userId: string, connectionId: string) {
+    const connection = await this.prisma.platformConnection.findFirst({
+      where: { id: connectionId, userId, platform: Platform.GOOGLE_DRIVE },
+    });
+    if (!connection) {
+      throw new NotFoundException('Google Drive connection not found');
+    }
+    const fresh =
+      connection.tokenExpiry && connection.tokenExpiry.getTime() > Date.now() + 60_000
+        ? connection
+        : await this.refreshToken(connection.id);
+    return { accessToken: fresh.accessToken, expiresAt: fresh.tokenExpiry };
+  }
+
   async getWordPressAuthUrl(redirectUri: string, state: string, siteUrl: string) {
     const clientId = await this.credentialsService.get('WORDPRESS_CLIENT_ID');
 
@@ -454,6 +527,7 @@ export class PlatformsService {
     switch (connection.platform) {
       case Platform.GOOGLE_ADS:
       case Platform.GOOGLE_MY_BUSINESS:
+      case Platform.GOOGLE_DRIVE:
         return this.refreshGoogleToken(connection);
       case Platform.LINKEDIN:
         return this.refreshLinkedInToken(connection);

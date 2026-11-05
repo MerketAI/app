@@ -78,6 +78,11 @@ export class PublishingService {
       throw new BadRequestException('No platform connection specified');
     }
 
+    // connectionId comes from the caller: never post through someone else's page.
+    if (connection.userId !== userId) {
+      throw new BadRequestException('Access denied');
+    }
+
     // Only charge once per piece of content, and remember whether this call is
     // the one that charged - a refund must not fire for credits it never took.
     const creditAction = this.getCreditAction(content.type as ContentType);

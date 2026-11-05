@@ -26,6 +26,7 @@ import { EmailModule } from './modules/email/email.module';
 import { DesignModule } from './modules/design/design.module';
 import { VideoModule } from './modules/video/video.module';
 import { TrendsModule } from './modules/trends/trends.module';
+import { AgentModule } from './modules/agent/agent.module';
 import { AssetsModule } from './modules/assets/assets.module';
 import { PartnerModule } from './modules/partner/partner.module';
 import { SchedulerModule } from './modules/scheduler/scheduler.module';
@@ -116,6 +117,7 @@ import { PartnerLoggingInterceptor } from './modules/partner/partner-logging.int
 
     // Trends & Market Intelligence
     TrendsModule,
+    AgentModule,
 
     // Cron jobs
     SchedulerModule,
