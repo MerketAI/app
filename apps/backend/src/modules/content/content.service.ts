@@ -238,6 +238,17 @@ export class ContentService {
       throw new BadRequestException('Scheduled time must be in the future');
     }
 
+    // connectionId comes from the caller: never schedule through someone else's page.
+    if (dto.connectionId) {
+      const owned = await this.prisma.platformConnection.findFirst({
+        where: { id: dto.connectionId, userId },
+        select: { id: true },
+      });
+      if (!owned) {
+        throw new BadRequestException('Access denied');
+      }
+    }
+
     // Consume credits when scheduling
     const creditAction = CONTENT_TYPE_TO_CREDIT_ACTION[content.type as ContentType];
     await this.subscriptionsService.consumeCredits(userId, creditAction, contentId);
