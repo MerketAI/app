@@ -9,6 +9,13 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CredentialsService } from '../credentials/credentials.service';
 import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 import { RendererService } from './renderer.service';
+import { UploadService } from '../upload/upload.service';
+import { AssetsService } from '../assets/assets.service';
+import { DecorativeService } from '../assets/decorative.service';
+import { buildPalette, moodForIndustry, TYPE_PAIRS } from './templates/tokens';
+import { seedFrom } from './templates/shapes';
+import { selectTemplate } from './templates/registry';
+import { TemplateContext, FeatureItem, ContactLine } from './templates/types';
 import {
   GenerateDesignDto,
   UpdateDesignDto,
@@ -115,6 +122,9 @@ export class DesignService {
     private credentialsService: CredentialsService,
     private subscriptionsService: SubscriptionsService,
     private rendererService: RendererService,
+    private uploadService: UploadService,
+    private assetsService: AssetsService,
+    private decorativeService: DecorativeService,
   ) {}
 
   // ---- AI Generation ----
@@ -129,14 +139,23 @@ export class DesignService {
     const width = preset.width;
     const height = preset.height;
 
-    let businessContext: Record<string, any> = {};
+    let suppliedContext: Record<string, any> = {};
     if (dto.businessContext) {
       try {
-        businessContext = JSON.parse(dto.businessContext);
+        suppliedContext = JSON.parse(dto.businessContext);
       } catch {
-        throw new BadRequestException('businessContext must be a valid JSON string');
+        throw new BadRequestException(
+          'businessContext must be a valid JSON string',
+        );
       }
     }
+
+    // The tenant's brand already lives in their profile, so a partner should not
+    // have to resend it on every call. Anything passed explicitly still wins.
+    const businessContext = {
+      ...(await this.loadBrandContext(userId)),
+      ...suppliedContext,
+    };
 
     const htmlContent = await this.callAnthropicForDesign(
       dto.prompt,
@@ -170,6 +189,66 @@ export class DesignService {
     return { design };
   }
 
+  /**
+   * Assembles the brand context a design needs from what the tenant has already
+   * stored: profile, services and account contact details.
+   */
+  private async loadBrandContext(userId: string): Promise<Record<string, any>> {
+    const profile = await this.prisma.userProfile.findUnique({
+      where: { userId },
+      include: {
+        businessServices: {
+          where: { isActive: true },
+          orderBy: { createdAt: 'asc' },
+          // Load up to the densest template's capacity; each template slices
+          // down to what it can show. Capping here silently starved the
+          // two-column layouts of the rows they were designed for.
+          take: 10,
+          select: { name: true },
+        },
+      },
+    });
+
+    if (!profile) return {};
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true, phone: true },
+    });
+
+    const usps = this.parseJsonArray(profile.uniqueSellingPoints);
+    const services = profile.businessServices.map((svc) => svc.name);
+
+    return {
+      businessName: profile.businessName,
+      tagline: profile.tagline,
+      valueProposition: profile.valueProposition,
+      description: profile.description,
+      industry: profile.industry,
+      brandColors: profile.brandColors || profile.primaryColors,
+      logoUrl: profile.logoUrl,
+      website: profile.website,
+      address: profile.location,
+      city: profile.city,
+      country: profile.country,
+      email: user?.email,
+      phone: user?.phone,
+      // Services are the natural bullet list on a flyer; fall back to USPs.
+      highlights: services.length > 0 ? services : usps,
+    };
+  }
+
+  private parseJsonArray(value: unknown): string[] {
+    if (Array.isArray(value)) return value as string[];
+    if (typeof value !== 'string' || !value.trim()) return [];
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed.map(String) : [];
+    } catch {
+      return [];
+    }
+  }
+
   private async callAnthropicForDesign(
     prompt: string,
     width: number,
@@ -184,7 +263,14 @@ export class DesignService {
       this.logger.warn(
         'No ANTHROPIC_API_KEY configured. Returning mock design template.',
       );
-      return this.generateMockTemplate(prompt, width, height, category, style, businessContext);
+      return await this.generateMockTemplate(
+        prompt,
+        width,
+        height,
+        category,
+        style,
+        businessContext,
+      );
     }
 
     const brandSection = Object.keys(businessContext).length
@@ -246,7 +332,14 @@ Output the complete HTML document only.`;
         this.logger.error(
           `Anthropic API error: ${response.status} - ${errorBody}`,
         );
-        return this.generateMockTemplate(prompt, width, height, category, style, businessContext);
+        return await this.generateMockTemplate(
+        prompt,
+        width,
+        height,
+        category,
+        style,
+        businessContext,
+      );
       }
 
       const data = (await response.json()) as {
@@ -256,7 +349,14 @@ Output the complete HTML document only.`;
       const textBlock = data.content?.find((block) => block.type === 'text');
       if (!textBlock?.text) {
         this.logger.error('No text content in Anthropic response');
-        return this.generateMockTemplate(prompt, width, height, category, style, businessContext);
+        return await this.generateMockTemplate(
+        prompt,
+        width,
+        height,
+        category,
+        style,
+        businessContext,
+      );
       }
 
       // Clean up response - remove markdown fences if present
@@ -272,21 +372,38 @@ Output the complete HTML document only.`;
       return html.trim();
     } catch (error) {
       this.logger.error('Failed to call Anthropic API for design generation', error);
-      return this.generateMockTemplate(prompt, width, height, category, style, businessContext);
+      return await this.generateMockTemplate(
+        prompt,
+        width,
+        height,
+        category,
+        style,
+        businessContext,
+      );
     }
   }
 
-  private generateMockTemplate(
+  private async generateMockTemplate(
     prompt: string,
     width: number,
     height: number,
     category: string,
     style: string,
     businessContext: Record<string, any>,
-  ): string {
+  ): Promise<string> {
     const brandName = businessContext.businessName || 'Your Brand';
-    const brandColor = businessContext.brandColors || '#6366f1';
-    const tagline = businessContext.tagline || prompt;
+
+    // The prompt is an instruction to a designer, not copy. Putting it on the
+    // artwork leaks wording like "Clinic introduction post for..." into the
+    // finished asset, so prefer real brand copy and fall back to the prompt
+    // only when there is nothing else.
+    const headline =
+      businessContext.tagline ||
+      this.deriveHeadline(prompt, category);
+    const tagline =
+      businessContext.valueProposition ||
+      businessContext.description ||
+      (businessContext.tagline ? this.deriveHeadline(prompt, category) : prompt);
 
     const stylePresets: Record<string, { bg: string; accent: string; font: string }> = {
       modern: { bg: '#0f172a', accent: '#6366f1', font: "'Inter', sans-serif" },
@@ -297,8 +414,30 @@ Output the complete HTML document only.`;
       elegant: { bg: '#1c1917', accent: '#d4af37', font: "'Playfair Display', serif" },
     };
 
-    const s = stylePresets[style] || stylePresets.modern;
+    const preset = stylePresets[style] || stylePresets.modern;
+    // A supplied brand colour should win over the generic style accent.
+    const brandAccent = this.firstHexColor(businessContext.brandColors);
+    const s = brandAccent ? { ...preset, accent: brandAccent } : preset;
     const isTall = height > width;
+
+    // Flyers and posters go through the template system: tokens, real
+    // typography, a shape language and a dense archetype. The centred hero
+    // below is only a fallback for sizes no archetype covers yet.
+    if (
+      category === 'FLYER' ||
+      category === 'POSTER' ||
+      category === 'SOCIAL_POST' ||
+      category === 'AD'
+    ) {
+      return this.renderFromTemplate(
+        businessContext.templateId,
+        width,
+        height,
+        headline,
+        tagline,
+        { ...businessContext, category },
+      );
+    }
 
     return `<!DOCTYPE html>
 <html lang="en">
@@ -339,9 +478,9 @@ Output the complete HTML document only.`;
     left: -${Math.round(width * 0.08)}px;
     width: ${Math.round(width * 0.35)}px;
     height: ${Math.round(width * 0.35)}px;
-    background: ${brandColor};
+    background: ${s.bg === '#ffffff' ? s.accent : '#ffffff'};
     border-radius: 50%;
-    opacity: 0.2;
+    opacity: 0.08;
   }
   .content {
     position: relative;
@@ -398,13 +537,129 @@ Output the complete HTML document only.`;
   <div class="content">
     <div class="brand-name">${this.escapeHtml(brandName)}</div>
     <div class="divider"></div>
-    <h1 class="headline">${this.escapeHtml(this.deriveHeadline(prompt, category))}</h1>
+    <h1 class="headline">${this.escapeHtml(headline)}</h1>
     <p class="tagline">${this.escapeHtml(tagline)}</p>
     <div class="cta-button">Learn More</div>
   </div>
 </div>
 </body>
 </html>`;
+  }
+
+  /**
+   * brandColors is free text ("Deep blue (#1a365d), White"), so pull the first
+   * usable hex value out of it rather than trusting the whole string.
+   */
+  /**
+   * Assembles a TemplateContext and renders one archetype.
+   *
+   * All I/O - icon resolution above all - happens here, so templates stay
+   * synchronous and pure.
+   */
+  private async renderFromTemplate(
+    templateId: string | undefined,
+    width: number,
+    height: number,
+    headline: string,
+    subheadline: string,
+    ctx: Record<string, any>,
+  ): Promise<string> {
+    const template = selectTemplate({
+      templateId: templateId || ctx.templateId,
+      hasPhoto: Boolean(ctx.heroImageUrl),
+      category: ctx.category,
+    });
+
+    const palette = buildPalette(this.firstHexColor(ctx.brandColors));
+    const mood = moodForIndustry(ctx.industry, ctx.subIndustry);
+    const type = TYPE_PAIRS[mood];
+    const brandName = ctx.businessName || 'Your Brand';
+    const seed = seedFrom(brandName);
+
+    const highlights: string[] = Array.isArray(ctx.highlights)
+      ? ctx.highlights.slice(0, template.featureCapacity)
+      : [];
+
+    // Marks must contrast with whatever the template puts behind them.
+    const iconColor =
+      template.surface === 'accent' ? palette.onAccent : palette.accent;
+    const contactIconColor =
+      template.surface === 'accent' ? palette.accent : palette.accentAlt;
+
+    const featureIcons = await this.assetsService.iconsForFeatures(highlights, {
+      industry: ctx.industry,
+      color: iconColor,
+      size: 48,
+    });
+    const features: FeatureItem[] = highlights.map((text, i) => ({
+      text,
+      iconSvg: featureIcons[i]?.svg ?? '',
+    }));
+
+    const contactSpec: { concept: string; text: string }[] = [];
+    if (ctx.address) contactSpec.push({ concept: 'location', text: String(ctx.address) });
+    if (ctx.phone) contactSpec.push({ concept: 'phone', text: String(ctx.phone) });
+    if (ctx.email) contactSpec.push({ concept: 'email', text: String(ctx.email) });
+    if (ctx.website) {
+      contactSpec.push({
+        concept: 'website',
+        text: String(ctx.website).replace(/^https?:[/][/]/, ''),
+      });
+    }
+    const contactIcons = await this.assetsService.getIcons(
+      contactSpec.map((c) => c.concept),
+      { color: contactIconColor, size: 40 },
+    );
+    const contact: ContactLine[] = contactSpec.map((c, i) => ({
+      text: c.text,
+      iconSvg: contactIcons[i]?.svg ?? '',
+    }));
+
+    // Trust markers: explicit if supplied, otherwise the brand's own USPs.
+    const badgeTexts: string[] = Array.isArray(ctx.badges)
+      ? ctx.badges.slice(0, 4)
+      : Array.isArray(ctx.uniqueSellingPoints)
+        ? ctx.uniqueSellingPoints.slice(0, 4)
+        : [];
+    const badgeIcons = await this.assetsService.iconsForFeatures(badgeTexts, {
+      industry: ctx.industry,
+      color: palette.accent,
+      size: 40,
+    });
+    const badges: FeatureItem[] = badgeTexts.map((text, i) => ({
+      text,
+      iconSvg: badgeIcons[i]?.svg ?? '',
+    }));
+
+    const context: TemplateContext = {
+      width,
+      height,
+      palette,
+      type,
+      seed,
+      brandName,
+      headline,
+      subheadline,
+      featuresTitle: ctx.featuresTitle,
+      features,
+      contact,
+      timings: Array.isArray(ctx.timings) ? ctx.timings.slice(0, 4) : [],
+      badges,
+      ctaText: ctx.ctaText || 'Book your appointment today',
+      heroImageUrl: ctx.heroImageUrl,
+      cutoutUrl: ctx.cutoutUrl,
+      photoCredit: ctx.photoCredit,
+      logoUrl: ctx.logoUrl,
+      escape: (v: string) => this.escapeHtml(v),
+    };
+
+    return template.render(context);
+  }
+
+  private firstHexColor(value: unknown): string | null {
+    if (typeof value !== 'string') return null;
+    const match = value.match(/#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})\b/);
+    return match ? match[0] : null;
   }
 
   private deriveHeadline(prompt: string, category: string): string {
@@ -491,31 +746,95 @@ Output the complete HTML document only.`;
 
   // ---- Render ----
 
+  /**
+   * Renders a design and, when S3 is configured, stores it so the result has a
+   * public URL. Social platforms download media by URL, so a design that is only
+   * streamed back to the browser can never be attached to a post.
+   */
   async renderDesign(userId: string, designId: string, dto: RenderDesignDto) {
     const design = await this.getDesignById(userId, designId);
 
-    // Consume credits for rendering
-    await this.subscriptionsService.consumeCredits(userId, 'DESIGN_RENDER', designId);
+    await this.subscriptionsService.consumeCredits(
+      userId,
+      'DESIGN_RENDER',
+      designId,
+    );
 
     const format = (dto.format || 'PNG').toLowerCase() as 'png' | 'pdf';
 
-    const buffer = await this.rendererService.renderToImage(
+    const rendered = await this.rendererService.renderToImage(
       design.htmlContent,
       design.width,
       design.height,
       format,
     );
 
-    // Update outputUrl field to indicate render has occurred
+    // Only a real render is worth storing - a placeholder must never end up as
+    // the asset a post points at.
+    let hostedUrl: string | null = null;
+    let storageWarning: string | undefined;
+
+    if (rendered.renderer === 'puppeteer') {
+      try {
+        const upload = await this.uploadService.uploadBuffer(rendered.buffer, {
+          folder: `designs/${userId}`,
+          extension: rendered.extension,
+          contentType: rendered.contentType,
+        });
+        hostedUrl = upload.url;
+      } catch (error) {
+        storageWarning = `Rendered successfully but could not be stored: ${(error as Error).message}`;
+        this.logger.warn(storageWarning);
+      }
+    }
+
     await this.prisma.design.update({
       where: { id: designId },
       data: {
-        outputUrl: `rendered:${format}:${new Date().toISOString()}`,
+        // Keep the previous URL if this render could not be stored, rather than
+        // overwriting a good asset with nothing.
+        ...(hostedUrl ? { outputUrl: hostedUrl } : {}),
         creditsConsumed: design.creditsConsumed + 5,
       },
     });
 
-    return { buffer, format };
+    return {
+      buffer: rendered.buffer,
+      format,
+      contentType: rendered.contentType,
+      extension: rendered.extension,
+      url: hostedUrl,
+      renderer: rendered.renderer,
+      warning: rendered.warning ?? storageWarning,
+    };
+  }
+
+  /**
+   * Renders, stores and returns just the public URL - the shape the content and
+   * publishing endpoints need for `mediaUrls`.
+   */
+  async exportDesignAsset(
+    userId: string,
+    designId: string,
+    dto: RenderDesignDto,
+  ) {
+    const result = await this.renderDesign(userId, designId, dto);
+
+    if (!result.url) {
+      throw new BadRequestException(
+        result.warning ||
+          'The design could not be stored, so it has no public URL. Check the server S3 credentials and that Puppeteer is installed.',
+      );
+    }
+
+    const design = await this.getDesignById(userId, designId);
+    return {
+      designId,
+      url: result.url,
+      format: result.format,
+      width: design.width,
+      height: design.height,
+    };
   }
 
   // ---- Duplicate ----

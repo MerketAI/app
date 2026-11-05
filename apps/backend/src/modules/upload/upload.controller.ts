@@ -15,12 +15,12 @@ import {
   ApiConsumes,
   ApiBody,
 } from '@nestjs/swagger';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { HybridAuthGuard } from '../partner/guards/hybrid-auth.guard';
 import { UploadService } from './upload.service';
 
 @ApiTags('Upload')
 @Controller({ path: 'upload', version: '1' })
-@UseGuards(JwtAuthGuard)
+@UseGuards(HybridAuthGuard)
 @ApiBearerAuth()
 export class UploadController {
   constructor(private uploadService: UploadService) {}

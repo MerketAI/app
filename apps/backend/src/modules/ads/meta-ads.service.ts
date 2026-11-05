@@ -22,6 +22,8 @@ interface MetaCampaignData {
 }
 
 interface MetaInsight {
+  /** True when this record was synthesised because credentials were missing. */
+  isMockData?: boolean;
   date: string;
   impressions: number;
   clicks: number;
@@ -365,6 +367,7 @@ export class MetaAdsService {
       const conversions = Math.floor(clicks * (Math.random() * 0.08 + 0.01));
 
       insights.push({
+        isMockData: true,
         date: current.toISOString().split('T')[0],
         impressions,
         clicks,

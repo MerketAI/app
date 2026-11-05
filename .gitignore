@@ -90,3 +90,8 @@ aux.*
 
 # PowerShell scripts (development only)
 *.ps1
+
+# Credential files must never be committed
+creds.txt
+*.creds
+*creds.txt

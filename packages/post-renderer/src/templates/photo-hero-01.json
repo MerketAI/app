@@ -1,0 +1,369 @@
+{
+  "schemaVersion": "1.0.0",
+  "id": "photo-hero-01",
+  "templateVersion": "1.1.0",
+  "title": "Photo hero",
+  "family": "medical-photo",
+  "status": "active",
+  "description": "Photo-led social post: photograph masked with a scalloped underside, brand held in a cloud badge over the seam, copy and services on the accent field, contact card at the foot.",
+  "campaignTypes": [
+    "clinic_profile",
+    "awareness",
+    "announcement",
+    "health_tip"
+  ],
+  "formats": [
+    "instagram_square",
+    "instagram_portrait"
+  ],
+  "referenceFormat": "instagram_square",
+  "theme": {
+    "mood": "playful",
+    "background": "accent"
+  },
+  "capabilities": {
+    "maxServices": 6,
+    "supportsCutout": true,
+    "supportsPhoto": true,
+    "supportsTimings": false,
+    "supportsBadges": false
+  },
+  "slots": {
+    "heroImage": {
+      "kind": "image",
+      "source": "asset",
+      "required": true,
+      "overflow": "reject",
+      "description": "The photograph carries this layout; it is not optional."
+    },
+    "cutout": {
+      "kind": "image",
+      "source": "asset",
+      "required": false,
+      "overflow": "hide",
+      "fallback": "hide",
+      "description": "Transparent practitioner cutout, stood over the seam."
+    },
+    "brandName": {
+      "kind": "text",
+      "source": "profile",
+      "profileField": "clinicName",
+      "required": true,
+      "maxChars": 46,
+      "maxLines": 2,
+      "minFontSize": 30,
+      "maxFontSize": 58,
+      "overflow": "shrink"
+    },
+    "headline": {
+      "kind": "richtext",
+      "source": "campaign",
+      "required": true,
+      "maxChars": 70,
+      "maxLines": 3,
+      "minFontSize": 38,
+      "maxFontSize": 66,
+      "overflow": "shrink"
+    },
+    "subheadline": {
+      "kind": "text",
+      "source": "campaign",
+      "required": false,
+      "maxChars": 110,
+      "maxLines": 2,
+      "minFontSize": 20,
+      "maxFontSize": 27,
+      "overflow": "shrink",
+      "fallback": "hide"
+    },
+    "services": {
+      "kind": "list",
+      "source": "campaign",
+      "required": false,
+      "maxItems": 5,
+      "maxItemChars": 36,
+      "minFontSize": 19,
+      "maxFontSize": 27,
+      "overflow": "shrink",
+      "fallback": "hide"
+    },
+    "cta": {
+      "kind": "text",
+      "source": "campaign",
+      "required": false,
+      "maxChars": 36,
+      "maxLines": 1,
+      "minFontSize": 22,
+      "maxFontSize": 32,
+      "overflow": "shrink",
+      "fallback": "hide"
+    },
+    "photoCredit": {
+      "kind": "text",
+      "source": "asset",
+      "required": false,
+      "maxChars": 60,
+      "maxLines": 1,
+      "overflow": "truncate",
+      "fallback": "hide",
+      "description": "Attribution a stock licence obliges us to display."
+    },
+    "phone": {
+      "kind": "text",
+      "source": "profile",
+      "profileField": "phone",
+      "required": false,
+      "maxChars": 24,
+      "maxLines": 1,
+      "overflow": "truncate",
+      "fallback": "hide"
+    },
+    "email": {
+      "kind": "text",
+      "source": "profile",
+      "profileField": "email",
+      "required": false,
+      "maxChars": 46,
+      "maxLines": 1,
+      "overflow": "truncate",
+      "fallback": "hide"
+    },
+    "website": {
+      "kind": "text",
+      "source": "profile",
+      "profileField": "website",
+      "required": false,
+      "maxChars": 46,
+      "maxLines": 1,
+      "overflow": "truncate",
+      "fallback": "hide"
+    }
+  },
+  "zones": [
+    {
+      "id": "photo",
+      "layer": 1,
+      "frame": {
+        "x": 0,
+        "y": 0,
+        "width": 1080,
+        "height": 392
+      },
+      "clip": true,
+      "children": [
+        {
+          "component": "Image",
+          "slot": "heroImage",
+          "mask": "cloudBottom",
+          "style": {
+            "objectPosition": "center 28%"
+          }
+        }
+      ]
+    },
+    {
+      "id": "sparkles",
+      "layer": 1,
+      "frame": {
+        "x": 0,
+        "y": 392,
+        "width": 1080,
+        "height": 688
+      },
+      "children": [
+        {
+          "component": "Shape",
+          "shape": "confetti",
+          "style": {
+            "color": "onAccentEmphasis",
+            "opacity": 0.5
+          }
+        }
+      ]
+    },
+    {
+      "id": "badge",
+      "layer": 4,
+      "frame": {
+        "x": 150,
+        "y": 318,
+        "width": 780,
+        "height": 166
+      },
+      "children": [
+        {
+          "component": "Shape",
+          "shape": "cloud",
+          "style": {
+            "color": "surface"
+          }
+        }
+      ]
+    },
+    {
+      "id": "badgeText",
+      "layer": 5,
+      "frame": {
+        "x": 196,
+        "y": 350,
+        "width": 688,
+        "height": 104
+      },
+      "style": {
+        "justify": "center",
+        "align": "center"
+      },
+      "children": [
+        {
+          "component": "Text",
+          "slot": "brandName",
+          "style": {
+            "fontFamily": "display",
+            "fontSize": 46,
+            "fontWeight": 800,
+            "textTransform": "uppercase",
+            "textAlign": "center",
+            "lineHeight": 1.05,
+            "color": "accent"
+          }
+        }
+      ]
+    },
+    {
+      "id": "cutout",
+      "layer": 6,
+      "frame": {
+        "x": 700,
+        "y": 60,
+        "width": 360,
+        "height": 560
+      },
+      "children": [
+        {
+          "component": "DoctorCutout",
+          "slot": "cutout",
+          "style": {
+            "shadow": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "copy",
+      "layer": 3,
+      "frame": {
+        "x": 64,
+        "y": 496,
+        "width": 650,
+        "height": 180
+      },
+      "children": [
+        {
+          "component": "RichText",
+          "slot": "headline",
+          "style": {
+            "fontFamily": "display",
+            "fontSize": 66,
+            "fontWeight": 800,
+            "lineHeight": 1.06,
+            "textTransform": "uppercase",
+            "color": "onAccent"
+          }
+        },
+        {
+          "component": "Text",
+          "slot": "subheadline",
+          "style": {
+            "fontSize": 27,
+            "lineHeight": 1.45,
+            "opacity": 0.92,
+            "color": "onAccent",
+            "paddingTop": 14
+          }
+        }
+      ]
+    },
+    {
+      "id": "services",
+      "layer": 3,
+      "frame": {
+        "x": 64,
+        "y": 690,
+        "width": 700,
+        "height": 140
+      },
+      "clip": true,
+      "children": [
+        {
+          "component": "List",
+          "slot": "services",
+          "style": {
+            "fontSize": 26,
+            "fontWeight": 700,
+            "lineHeight": 1.3,
+            "color": "onAccent",
+            "columns": 2
+          }
+        }
+      ]
+    },
+    {
+      "id": "contactCard",
+      "layer": 4,
+      "frame": {
+        "x": 40,
+        "y": 846,
+        "width": 1000,
+        "height": 206
+      },
+      "clip": true,
+      "style": {
+        "background": "surface",
+        "borderRadius": 28,
+        "paddingTop": 22,
+        "paddingBottom": 22,
+        "paddingLeft": 36,
+        "paddingRight": 36,
+        "gap": 8,
+        "justify": "center"
+      },
+      "children": [
+        {
+          "component": "CTAButton",
+          "slot": "cta",
+          "style": {
+            "fontFamily": "display",
+            "fontSize": 32,
+            "fontWeight": 800,
+            "textTransform": "uppercase",
+            "color": "accent",
+            "background": "transparent",
+            "paddingTop": 0,
+            "paddingBottom": 0,
+            "paddingLeft": 0,
+            "paddingRight": 0
+          }
+        },
+        {
+          "component": "ContactBar",
+          "style": {
+            "fontSize": 22,
+            "lineHeight": 1.4,
+            "color": "onSurface",
+            "direction": "column",
+            "gap": 8
+          }
+        },
+        {
+          "component": "Text",
+          "slot": "photoCredit",
+          "style": {
+            "fontSize": 14,
+            "color": "onSurfaceMuted",
+            "paddingTop": 6
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -16,12 +16,13 @@ import {
 } from '@nestjs/swagger';
 import { AnalyticsService } from './analytics.service';
 import { GoogleAnalyticsService } from './google-analytics.service';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { HybridAuthGuard } from '../partner/guards/hybrid-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { withDataSource } from '../../common/utils/data-source.util';
 
 @ApiTags('analytics')
 @Controller({ path: 'analytics', version: '1' })
-@UseGuards(JwtAuthGuard)
+@UseGuards(HybridAuthGuard)
 @ApiBearerAuth()
 export class AnalyticsController {
   constructor(
@@ -72,7 +73,10 @@ export class AnalyticsController {
   @Get('ga/properties')
   @ApiOperation({ summary: 'List GA4 properties accessible to the user' })
   async getGAProperties(@CurrentUser('id') userId: string) {
-    return this.googleAnalyticsService.getProperties(userId);
+    return withDataSource(
+      await this.googleAnalyticsService.getProperties(userId),
+      { key: 'properties' },
+    );
   }
 
   @Get('ga/dashboard')
@@ -83,7 +87,15 @@ export class AnalyticsController {
     @Query('startDate') startDate: string,
     @Query('endDate') endDate: string,
   ) {
-    return this.googleAnalyticsService.getDashboard(userId, propertyId, startDate, endDate);
+    return withDataSource(
+      await this.googleAnalyticsService.getDashboard(
+        userId,
+        propertyId,
+        startDate,
+        endDate,
+      ),
+      { key: 'dashboard' },
+    );
   }
 
   @Get('ga/traffic-sources')
@@ -94,7 +106,15 @@ export class AnalyticsController {
     @Query('startDate') startDate: string,
     @Query('endDate') endDate: string,
   ) {
-    return this.googleAnalyticsService.getTrafficSources(userId, propertyId, startDate, endDate);
+    return withDataSource(
+      await this.googleAnalyticsService.getTrafficSources(
+        userId,
+        propertyId,
+        startDate,
+        endDate,
+      ),
+      { key: 'trafficSources' },
+    );
   }
 
   @Post('ga/sync')

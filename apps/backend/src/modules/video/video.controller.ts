@@ -23,12 +23,12 @@ import {
   UpdateVideoDto,
   VideoFilterDto,
 } from './dto/video.dto';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { HybridAuthGuard } from '../partner/guards/hybrid-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
 @ApiTags('videos')
 @Controller({ path: 'videos', version: '1' })
-@UseGuards(JwtAuthGuard)
+@UseGuards(HybridAuthGuard)
 @ApiBearerAuth()
 export class VideoController {
   constructor(private videoService: VideoService) {}

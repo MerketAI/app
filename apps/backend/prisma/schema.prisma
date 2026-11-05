@@ -47,6 +47,7 @@ model User {
   designs             Design[]
   videoProjects       VideoProject[]
   analyticsSnapshots  AnalyticsSnapshot[]
+  partnerAppUsers     PartnerAppUser[]
 
   @@map("users")
 }
@@ -297,6 +298,14 @@ model BusinessCompetitor {
   // Performance (estimated/observed)
   socialFollowers  String   @default("{}") @map("social_followers") // JSON: {facebook: 10000, etc.}
   engagementRate   Float?   @map("engagement_rate")
+
+  // Observed ads, pulled from public ad-transparency sources rather than
+  // inferred by a model. Kept separate from adStrategies/adPlatforms above so
+  // that estimated and factual data are never conflated.
+  observedAds      String   @default("[]") @map("observed_ads")      // JSON array of ad records
+  observedAdsCount Int      @default(0) @map("observed_ads_count")
+  adsSources       String   @default("[]") @map("ads_sources")       // JSON: ["meta_ad_library", ...]
+  adsObservedAt    DateTime? @map("ads_observed_at")
 
   // Threat level & notes
   threatLevel      String   @default("MEDIUM") @map("threat_level") // LOW, MEDIUM, HIGH
@@ -1071,4 +1080,92 @@ model AnalyticsSnapshot {
   @@unique([userId, propertyId, date])
   @@index([userId, date])
   @@map("analytics_snapshots")
+}
+
+// ============================================
+// B2B Partner Platform Models
+// ============================================
+// Jasper is sold to platforms (partners), not directly to end consumers.
+// A partner authenticates server-to-server with APP_KEY + APP_SECRET and
+// identifies which of its own subscribers the call is for via APP_UID.
+
+model PartnerApp {
+  id               String    @id @default(uuid())
+  name             String
+  description      String?
+  contactEmail     String?   @map("contact_email")
+
+  // Credentials
+  appKey           String    @unique @map("app_key")
+  appSecretHash    String    @map("app_secret_hash")
+  appSecretLast4   String    @map("app_secret_last4")
+  secretRotatedAt  DateTime? @map("secret_rotated_at")
+
+  // Authorization
+  status           String    @default("ACTIVE") // ACTIVE, SUSPENDED, REVOKED
+  scopes           String    @default("[]")     // JSON array, e.g. ["content:write","publish:write"]
+  allowedPlatforms String    @default("[]") @map("allowed_platforms") // JSON array; empty = all
+  ipAllowlist      String    @default("[]") @map("ip_allowlist")      // JSON array; empty = any
+
+  // Limits & provisioning defaults for subscribers created under this app
+  rateLimitPerMin  Int       @default(120) @map("rate_limit_per_min")
+  maxSubscribers   Int?      @map("max_subscribers")
+  defaultTier      String    @default("STARTER") @map("default_tier")
+  defaultCredits   Int       @default(100) @map("default_credits")
+  autoProvision    Boolean   @default(true) @map("auto_provision")
+
+  webhookUrl       String?   @map("webhook_url")
+  webhookSecret    String?   @map("webhook_secret")
+
+  lastUsedAt       DateTime? @map("last_used_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  subscribers      PartnerAppUser[]
+  requestLogs      PartnerApiLog[]
+
+  @@index([status])
+  @@map("partner_apps")
+}
+
+model PartnerAppUser {
+  id           String    @id @default(uuid())
+  appId        String    @map("app_id")
+  appUid       String    @map("app_uid") // partner's own subscriber id, opaque string
+  userId       String    @map("user_id")
+
+  status       String    @default("ACTIVE") // ACTIVE, SUSPENDED
+  externalRef  String?   @map("external_ref")
+  metadata     String    @default("{}")
+  lastSeenAt   DateTime? @map("last_seen_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  app          PartnerApp @relation(fields: [appId], references: [id], onDelete: Cascade)
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([appId, appUid])
+  @@index([appId, status])
+  @@index([userId])
+  @@map("partner_app_users")
+}
+
+model PartnerApiLog {
+  id           String   @id @default(uuid())
+  appId        String   @map("app_id")
+  appUid       String?  @map("app_uid")
+  userId       String?  @map("user_id")
+  method       String
+  path         String
+  statusCode   Int      @map("status_code")
+  durationMs   Int      @map("duration_ms")
+  ipAddress    String?  @map("ip_address")
+  userAgent    String?  @map("user_agent")
+  errorMessage String?  @map("error_message")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  app          PartnerApp @relation(fields: [appId], references: [id], onDelete: Cascade)
+
+  @@index([appId, createdAt])
+  @@map("partner_api_logs")
 }

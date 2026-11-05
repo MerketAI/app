@@ -104,78 +104,91 @@ export class TrendsService {
     };
   }
 
+  /**
+   * Trends for the tenant's own industry and country.
+   *
+   * Categories come from INDUSTRY_QUERIES so they always match what the sync
+   * actually wrote - the previous hand-written map listed categories that were
+   * never populated, so every lookup silently fell back to general trends.
+   */
   async getIndustryTrends(userId: string) {
-    // Get user profile to determine industry
     const profile = await this.prisma.userProfile.findUnique({
       where: { userId },
     });
 
-    const industry = profile?.industry || 'marketing';
+    const industry = (profile?.industry || 'marketing').toLowerCase().trim();
     const subIndustry = profile?.subIndustry;
 
-    // Map industry to relevant trend categories
-    const categoryMap: Record<string, string[]> = {
-      marketing: ['digital_marketing', 'social_media', 'advertising', 'content'],
-      technology: ['technology', 'software', 'ai', 'saas'],
-      ecommerce: ['ecommerce', 'retail', 'shopping', 'consumer'],
-      healthcare: ['healthcare', 'wellness', 'medical', 'health'],
-      finance: ['finance', 'fintech', 'banking', 'investment'],
-      education: ['education', 'edtech', 'learning', 'training'],
-      food: ['food', 'restaurant', 'delivery', 'cooking'],
-      travel: ['travel', 'hospitality', 'tourism', 'destination'],
-      real_estate: ['real_estate', 'property', 'housing', 'construction'],
-      fitness: ['fitness', 'gym', 'wellness', 'health'],
-    };
+    const queries =
+      TrendsService.INDUSTRY_QUERIES[industry] ||
+      TrendsService.INDUSTRY_QUERIES.marketing;
+    const relevantCategories = queries.map((q) => q.category);
 
-    const relevantCategories = categoryMap[industry.toLowerCase()] || ['marketing', 'business'];
-
+    const geo = this.resolveGeo(profile?.country);
+    const region = geo ? geo.toLowerCase() : null;
     const now = new Date();
-    const trends = await this.prisma.trendingTopic.findMany({
+
+    // Prefer trends for the tenant's own country, then fall back outward, so a
+    // sparse local cache still returns something useful.
+    const attempts: { where: any; relevance: string }[] = [];
+    if (region) {
+      attempts.push({
+        where: {
+          expiresAt: { gt: now },
+          category: { in: relevantCategories },
+          region,
+        },
+        relevance: 'industry_local',
+      });
+    }
+    attempts.push({
       where: {
         expiresAt: { gt: now },
         category: { in: relevantCategories },
       },
-      orderBy: { score: 'desc' },
-      take: 15,
+      relevance: 'industry',
+    });
+    attempts.push({
+      where: { expiresAt: { gt: now } },
+      relevance: 'general',
     });
 
-    // If no category-specific trends, return general trends
-    if (trends.length === 0) {
-      const generalTrends = await this.prisma.trendingTopic.findMany({
-        where: { expiresAt: { gt: now } },
+    for (const attempt of attempts) {
+      const trends = await this.prisma.trendingTopic.findMany({
+        where: attempt.where,
         orderBy: { score: 'desc' },
         take: 15,
       });
 
+      if (trends.length === 0) continue;
+
       return {
         industry,
         subIndustry,
-        trends: generalTrends.map((t) => ({
+        region: region || 'global',
+        trends: trends.map((t) => ({
           id: t.id,
           topic: t.topic,
           category: t.category,
           score: t.score,
+          region: t.region,
           hashtags: this.parseJson(t.hashtags, []),
           keywords: this.parseJson(t.keywords, []),
-          relevance: 'general',
+          relevance: attempt.relevance,
         })),
-        count: generalTrends.length,
+        count: trends.length,
       };
     }
 
+    // Nothing cached at all - the sync has not run yet.
     return {
       industry,
       subIndustry,
-      trends: trends.map((t) => ({
-        id: t.id,
-        topic: t.topic,
-        category: t.category,
-        score: t.score,
-        hashtags: this.parseJson(t.hashtags, []),
-        keywords: this.parseJson(t.keywords, []),
-        relevance: 'industry',
-      })),
-      count: trends.length,
+      region: region || 'global',
+      trends: [],
+      count: 0,
+      message:
+        'No trending topics cached yet. They refresh every 6 hours, or an admin can trigger POST /api/v1/admin/scheduler/run/sync-trends.',
     };
   }
 
@@ -269,90 +282,256 @@ export class TrendsService {
     return this.insertMockTrends();
   }
 
-  private async fetchFromSerpApi(apiKey: string): Promise<{ synced: number; source: string }> {
-    const categories = [
+  /**
+   * Industry -> the Google Trends seed queries that populate it. The keys here
+   * must stay in step with the category map used by getIndustryTrends,
+   * otherwise an industry can never match anything that was actually synced.
+   */
+  private static readonly INDUSTRY_QUERIES: Record<
+    string,
+    { query: string; category: string }[]
+  > = {
+    marketing: [
       { query: 'digital marketing trends', category: 'digital_marketing' },
       { query: 'social media marketing', category: 'social_media' },
       { query: 'content marketing', category: 'content' },
+      { query: 'online advertising', category: 'advertising' },
+    ],
+    technology: [
+      { query: 'software trends', category: 'software' },
+      { query: 'AI tools', category: 'ai' },
+      { query: 'SaaS products', category: 'saas' },
+      { query: 'technology trends', category: 'technology' },
+    ],
+    ecommerce: [
       { query: 'ecommerce trends', category: 'ecommerce' },
-      { query: 'AI marketing', category: 'ai' },
-      { query: 'SEO trends', category: 'seo' },
-    ];
+      { query: 'online shopping', category: 'shopping' },
+      { query: 'retail trends', category: 'retail' },
+      { query: 'consumer trends', category: 'consumer' },
+    ],
+    healthcare: [
+      { query: 'healthcare trends', category: 'healthcare' },
+      { query: 'wellness trends', category: 'wellness' },
+      { query: 'medical technology', category: 'medical' },
+      { query: 'health tips', category: 'health' },
+    ],
+    finance: [
+      { query: 'fintech trends', category: 'fintech' },
+      { query: 'personal finance', category: 'finance' },
+      { query: 'banking technology', category: 'banking' },
+      { query: 'investment trends', category: 'investment' },
+    ],
+    education: [
+      { query: 'edtech trends', category: 'edtech' },
+      { query: 'online learning', category: 'learning' },
+      { query: 'education trends', category: 'education' },
+      { query: 'professional training', category: 'training' },
+    ],
+    food: [
+      { query: 'food trends', category: 'food' },
+      { query: 'restaurant trends', category: 'restaurant' },
+      { query: 'food delivery', category: 'delivery' },
+      { query: 'recipe ideas', category: 'cooking' },
+    ],
+    travel: [
+      { query: 'travel trends', category: 'travel' },
+      { query: 'hospitality trends', category: 'hospitality' },
+      { query: 'tourism', category: 'tourism' },
+      { query: 'holiday destinations', category: 'destination' },
+    ],
+    real_estate: [
+      { query: 'real estate trends', category: 'real_estate' },
+      { query: 'property market', category: 'property' },
+      { query: 'housing market', category: 'housing' },
+      { query: 'construction trends', category: 'construction' },
+    ],
+    fitness: [
+      { query: 'fitness trends', category: 'fitness' },
+      { query: 'gym workouts', category: 'gym' },
+      { query: 'wellness routines', category: 'wellness' },
+      { query: 'health and fitness', category: 'health' },
+    ],
+  };
 
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24h expiry
+  /** ISO-3166 country codes Google Trends accepts as its `geo` parameter. */
+  private static readonly COUNTRY_GEO: Record<string, string> = {
+    india: 'IN',
+    'united states': 'US',
+    usa: 'US',
+    us: 'US',
+    'united kingdom': 'GB',
+    uk: 'GB',
+    canada: 'CA',
+    australia: 'AU',
+    singapore: 'SG',
+    'united arab emirates': 'AE',
+    uae: 'AE',
+    germany: 'DE',
+    france: 'FR',
+    spain: 'ES',
+    italy: 'IT',
+    netherlands: 'NL',
+    brazil: 'BR',
+    mexico: 'MX',
+    japan: 'JP',
+    'south africa': 'ZA',
+    nigeria: 'NG',
+    kenya: 'KE',
+    indonesia: 'ID',
+    philippines: 'PH',
+    malaysia: 'MY',
+  };
+
+  private resolveGeo(country?: string | null): string | null {
+    if (!country) return null;
+    const key = country.trim().toLowerCase();
+    if (TrendsService.COUNTRY_GEO[key]) return TrendsService.COUNTRY_GEO[key];
+    // Already an ISO code?
+    if (/^[A-Za-z]{2}$/.test(country.trim())) {
+      return country.trim().toUpperCase();
+    }
+    return null;
+  }
+
+  /**
+   * Works out which industries and regions to sync from the tenants that
+   * actually exist, so a restaurant chain does not end up with SEO trends.
+   * Marketing is always included as a baseline.
+   */
+  private async resolveSyncTargets(): Promise<
+    { industry: string; geo: string | null; region: string }[]
+  > {
+    const profiles = await this.prisma.userProfile.findMany({
+      where: { industry: { not: null } },
+      select: { industry: true, country: true },
+      take: 500,
+    });
+
+    const seen = new Map<
+      string,
+      { industry: string; geo: string | null; region: string }
+    >();
+
+    // Baseline so the trends page is never empty for a brand-new tenant.
+    seen.set('marketing|global', {
+      industry: 'marketing',
+      geo: null,
+      region: 'global',
+    });
+
+    for (const profile of profiles) {
+      const industry = (profile.industry || '').toLowerCase().trim();
+      if (!TrendsService.INDUSTRY_QUERIES[industry]) continue;
+
+      const geo = this.resolveGeo(profile.country);
+      const region = geo ? geo.toLowerCase() : 'global';
+      seen.set(industry + '|' + region, { industry, geo, region });
+    }
+
+    return Array.from(seen.values());
+  }
+
+  private async fetchFromSerpApi(
+    apiKey: string,
+  ): Promise<{ synced: number; source: string }> {
+    const targets = await this.resolveSyncTargets();
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
     let synced = 0;
 
-    for (const { query, category } of categories) {
-      try {
-        const url = `https://serpapi.com/search?engine=google_trends&q=${encodeURIComponent(query)}&api_key=${apiKey}&data_type=RELATED_QUERIES`;
-        const response = await fetch(url);
+    for (const target of targets) {
+      const queries = TrendsService.INDUSTRY_QUERIES[target.industry] || [];
 
-        if (!response.ok) {
-          this.logger.warn(`SerpAPI request failed for "${query}": ${response.status}`);
-          continue;
-        }
-
-        const data = await response.json();
-
-        // Process rising queries
-        const risingQueries: SerpApiTrendResult[] = data.related_queries?.rising || [];
-        const topQueries: SerpApiTrendResult[] = data.related_queries?.top || [];
-
-        const allQueries = [
-          ...risingQueries.map((q) => ({
-            topic: q.query,
-            score: q.extracted_value || q.value || 50,
-            source: 'serpapi_rising',
-          })),
-          ...topQueries.map((q) => ({
-            topic: q.query,
-            score: q.extracted_value || q.value || 30,
-            source: 'serpapi_top',
-          })),
-        ];
-
-        for (const item of allQueries.slice(0, 10)) {
-          const hashtags = this.generateHashtags(item.topic);
-          const keywords = item.topic.toLowerCase().split(/\s+/).filter((w) => w.length > 2);
-
-          await this.prisma.trendingTopic.upsert({
-            where: {
-              id: await this.findExistingTrendId(item.topic, category),
-            },
-            update: {
-              score: item.score,
-              hashtags: JSON.stringify(hashtags),
-              keywords: JSON.stringify(keywords),
-              expiresAt,
-              source: item.source,
-            },
-            create: {
-              topic: item.topic,
-              category,
-              score: item.score,
-              hashtags: JSON.stringify(hashtags),
-              keywords: JSON.stringify(keywords),
-              region: 'global',
-              source: item.source,
-              expiresAt,
-            },
+      for (const { query, category } of queries) {
+        try {
+          const params = new URLSearchParams({
+            engine: 'google_trends',
+            q: query,
+            api_key: apiKey,
+            data_type: 'RELATED_QUERIES',
           });
-          synced++;
+          // Scoping to a country is what makes these trends "local"; without a
+          // geo, Google Trends returns worldwide interest.
+          if (target.geo) params.set('geo', target.geo);
+
+          const response = await fetch(
+            `https://serpapi.com/search?${params.toString()}`,
+          );
+
+          if (!response.ok) {
+            this.logger.warn(
+              `SerpAPI request failed for "${query}" (${target.region}): ${response.status}`,
+            );
+            continue;
+          }
+
+          const data = await response.json();
+          const risingQueries: SerpApiTrendResult[] =
+            data.related_queries?.rising || [];
+          const topQueries: SerpApiTrendResult[] =
+            data.related_queries?.top || [];
+
+          const allQueries = [
+            ...risingQueries.map((q) => ({
+              topic: q.query,
+              score: q.extracted_value || q.value || 50,
+              source: 'serpapi_rising',
+            })),
+            ...topQueries.map((q) => ({
+              topic: q.query,
+              score: q.extracted_value || q.value || 30,
+              source: 'serpapi_top',
+            })),
+          ];
+
+          for (const item of allQueries.slice(0, 10)) {
+            if (!item.topic) continue;
+            const hashtags = this.generateHashtags(item.topic);
+            const keywords = item.topic
+              .toLowerCase()
+              .split(/\s+/)
+              .filter((w) => w.length > 2);
+
+            const payload = {
+              score: item.score,
+              hashtags: JSON.stringify(hashtags),
+              keywords: JSON.stringify(keywords),
+              expiresAt,
+              source: item.source,
+            };
+
+            // Same topic can legitimately trend in several regions, so the
+            // region is part of the identity of a cached trend.
+            const existing = await this.prisma.trendingTopic.findFirst({
+              where: { topic: item.topic, category, region: target.region },
+              select: { id: true },
+            });
+
+            if (existing) {
+              await this.prisma.trendingTopic.update({
+                where: { id: existing.id },
+                data: payload,
+              });
+            } else {
+              await this.prisma.trendingTopic.create({
+                data: {
+                  topic: item.topic,
+                  category,
+                  region: target.region,
+                  ...payload,
+                },
+              });
+            }
+            synced++;
+          }
+        } catch (error) {
+          this.logger.error(
+            `Failed to fetch trends for "${query}" (${target.region}): ${(error as Error).message}`,
+          );
         }
-      } catch (error) {
-        this.logger.error(`Failed to fetch trends for "${query}":`, (error as Error).message);
       }
     }
 
     return { synced, source: 'serpapi' };
-  }
-
-  private async findExistingTrendId(topic: string, category: string): Promise<string> {
-    const existing = await this.prisma.trendingTopic.findFirst({
-      where: { topic, category },
-      select: { id: true },
-    });
-    return existing?.id || 'non-existent-id-for-create';
   }
 
   private async insertMockTrends(): Promise<{ synced: number; source: string }> {

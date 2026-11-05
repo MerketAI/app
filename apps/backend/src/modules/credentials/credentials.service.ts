@@ -49,6 +49,25 @@ export class CredentialsService implements OnModuleInit {
       { key: 'WORDPRESS_CLIENT_ID', category: 'wordpress', description: 'WordPress OAuth Client ID' },
       { key: 'WORDPRESS_CLIENT_SECRET', category: 'wordpress', description: 'WordPress OAuth Client Secret' },
       { key: 'ANTHROPIC_API_KEY', category: 'anthropic', description: 'Anthropic API key for Claude AI page generation' },
+      { key: 'META_AD_LIBRARY_TOKEN', category: 'meta', description: 'Meta access token for the public Ad Library API (competitor ad observation)' },
+      { key: 'S3_ENDPOINT', category: 'aws', description: 'S3-compatible endpoint (MinIO, self-hosted). Leave blank for AWS.' },
+      { key: 'S3_PUBLIC_BASE_URL', category: 'aws', description: 'Public base URL when using a custom S3 endpoint' },
+      { key: 'OPENAI_BASE_URL', category: 'ai', description: 'OpenAI-compatible base URL (Azure OpenAI or a gateway). Blank = api.openai.com' },
+      { key: 'ICONSCOUT_CLIENT_ID', category: 'assets', description: 'IconScout API Client-ID (illustrations, 3D, Lottie). Confirm your plan includes API access and permits redistribution in customer deliverables.' },
+      { key: 'REMOVEBG_API_KEY', category: 'assets', description: 'remove.bg API key for practitioner photo cutouts' },
+      // Image generation for the artwork layer of designs
+      { key: 'OPENAI_API_KEY', category: 'ai', description: 'OpenAI API key (gpt-image-1 artwork generation, competitor research)' },
+      { key: 'GEMINI_API_KEY', category: 'ai', description: 'Google Gemini API key (gemini-2.5-flash-image artwork generation)' },
+      // Free stock photo APIs (both free tiers, used by the design asset layer)
+      { key: 'PEXELS_API_KEY', category: 'assets', description: 'Pexels API key for free stock photography' },
+      { key: 'PIXABAY_API_KEY', category: 'assets', description: 'Pixabay API key for free stock photography' },
+      // Cloudflare R2 (primary object storage)
+      { key: 'R2_ACCOUNT_ID', category: 'r2', description: 'Cloudflare account ID (from the R2 dashboard)' },
+      { key: 'R2_ACCESS_KEY_ID', category: 'r2', description: 'R2 API token access key ID' },
+      { key: 'R2_SECRET_ACCESS_KEY', category: 'r2', description: 'R2 API token secret access key' },
+      { key: 'R2_BUCKET', category: 'r2', description: 'R2 bucket name for uploads and rendered designs' },
+      { key: 'R2_PUBLIC_BASE_URL', category: 'r2', description: 'Public bucket URL, e.g. https://pub-xxxx.r2.dev or your custom domain. Required: social platforms download media by URL.' },
+      // AWS S3 (fallback when R2 is not configured)
       { key: 'AWS_ACCESS_KEY_ID', category: 'aws', description: 'AWS Access Key ID for S3 uploads' },
       { key: 'AWS_SECRET_ACCESS_KEY', category: 'aws', description: 'AWS Secret Access Key for S3 uploads' },
       { key: 'AWS_S3_BUCKET', category: 'aws', description: 'AWS S3 Bucket name for file uploads' },

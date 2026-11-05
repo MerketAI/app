@@ -19,7 +19,7 @@ import {
 } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import { PlatformsService } from './platforms.service';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { HybridAuthGuard } from '../partner/guards/hybrid-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
 @ApiTags('platforms')
@@ -31,7 +31,7 @@ export class PlatformsController {
   ) {}
 
   @Get()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(HybridAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get all platform connections' })
   async getConnections(@CurrentUser('id') userId: string) {
@@ -39,7 +39,7 @@ export class PlatformsController {
   }
 
   @Get(':id')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(HybridAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get connection by ID' })
   async getConnection(
@@ -51,7 +51,7 @@ export class PlatformsController {
 
   // Meta (Facebook/Instagram) OAuth
   @Get('oauth/meta')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(HybridAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get Meta OAuth URL' })
   async getMetaAuthUrl(@CurrentUser('id') userId: string) {
@@ -81,7 +81,7 @@ export class PlatformsController {
 
   // Google OAuth
   @Get('oauth/google')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(HybridAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get Google OAuth URL' })
   async getGoogleAuthUrl(@CurrentUser('id') userId: string) {
@@ -111,7 +111,7 @@ export class PlatformsController {
 
   // WordPress OAuth
   @Get('oauth/wordpress')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(HybridAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get WordPress OAuth URL' })
   async getWordPressAuthUrl(
@@ -144,7 +144,7 @@ export class PlatformsController {
 
   // LinkedIn OAuth
   @Get('oauth/linkedin')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(HybridAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get LinkedIn OAuth URL' })
   async getLinkedInAuthUrl(@CurrentUser('id') userId: string) {
@@ -174,7 +174,7 @@ export class PlatformsController {
 
   // TikTok OAuth
   @Get('oauth/tiktok')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(HybridAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get TikTok OAuth URL' })
   async getTikTokAuthUrl(@CurrentUser('id') userId: string) {
@@ -203,7 +203,7 @@ export class PlatformsController {
   }
 
   @Post(':id/refresh')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(HybridAuthGuard)
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Refresh connection token' })
@@ -216,7 +216,7 @@ export class PlatformsController {
   }
 
   @Post(':id/test')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(HybridAuthGuard)
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Test platform connection' })
@@ -228,7 +228,7 @@ export class PlatformsController {
   }
 
   @Delete(':id')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(HybridAuthGuard)
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Disconnect platform' })
