@@ -3,7 +3,7 @@ import { createHash } from 'crypto';
 import { CredentialsService } from '../credentials/credentials.service';
 import { UploadService } from '../upload/upload.service';
 
-export type ImageProviderName = 'openai' | 'gemini';
+export type ImageProviderName = 'magnific' | 'openai' | 'gemini';
 
 export type ArtworkAspect = 'square' | 'portrait' | 'landscape';
 
@@ -83,13 +83,23 @@ export class ImageGenerationService {
     private uploadService: UploadService,
   ) {}
 
-  /** Providers that currently have credentials. */
+  /** Magnific (formerly the Freepik API); MAGNIFY_API_KEY is accepted as an alias. */
+  private async magnificKey(): Promise<string> {
+    return (
+      (await this.credentialsService.get('MAGNIFIC_API_KEY')) ||
+      (await this.credentialsService.get('MAGNIFY_API_KEY'))
+    );
+  }
+
+  /** Providers that currently have credentials, in order of preference. */
   async availableProviders(): Promise<ImageProviderName[]> {
-    const [openai, gemini] = await Promise.all([
+    const [magnific, openai, gemini] = await Promise.all([
+      this.magnificKey(),
       this.credentialsService.get('OPENAI_API_KEY'),
       this.credentialsService.get('GEMINI_API_KEY'),
     ]);
     const available: ImageProviderName[] = [];
+    if (magnific) available.push('magnific');
     if (openai) available.push('openai');
     if (gemini) available.push('gemini');
     return available;
@@ -111,7 +121,7 @@ export class ImageGenerationService {
     const available = await this.availableProviders();
     if (available.length === 0) {
       throw new BadRequestException(
-        'No image generation provider is configured. Set OPENAI_API_KEY or GEMINI_API_KEY in admin credentials.',
+        'No image generation provider is configured. Set MAGNIFIC_API_KEY, OPENAI_API_KEY or GEMINI_API_KEY in admin credentials.',
       );
     }
 
@@ -147,10 +157,16 @@ export class ImageGenerationService {
       };
     }
 
+    if (request.transparent && provider !== 'openai') {
+      warnings.push(`A transparent background is only supported by OpenAI; "${provider}" returned an opaque image.`);
+    }
+
     const buffer =
-      provider === 'openai'
-        ? await this.generateWithOpenAI(prompt, aspect, request.transparent)
-        : await this.generateWithGemini(prompt);
+      provider === 'magnific'
+        ? await this.generateWithMagnific(prompt, aspect, request.style)
+        : provider === 'openai'
+          ? await this.generateWithOpenAI(prompt, aspect, request.transparent)
+          : await this.generateWithGemini(prompt);
 
     const upload = await this.uploadService.uploadBuffer(buffer, {
       folder: `artwork/${userId}`,
@@ -271,7 +287,8 @@ export class ImageGenerationService {
       'https://api.openai.com/v1';
 
     const body: Record<string, any> = {
-      model: 'gpt-image-1',
+      // Not every key has every image model (some only have gpt-image-1.5/2).
+      model: (await this.credentialsService.get('OPENAI_IMAGE_MODEL')) || 'gpt-image-1',
       prompt,
       size: ImageGenerationService.OPENAI_SIZES[aspect],
       n: 1,
@@ -307,6 +324,70 @@ export class ImageGenerationService {
       );
     }
     return Buffer.from(b64, 'base64');
+  }
+
+  /** Aspect -> Magnific Mystic's named ratios, matched to the OpenAI sizes. */
+  private static readonly MAGNIFIC_ASPECTS: Record<ArtworkAspect, string> = {
+    square: 'square_1_1',
+    portrait: 'portrait_2_3',
+    landscape: 'standard_3_2',
+  };
+
+  /**
+   * Magnific Mystic. Jobs are asynchronous: submit, then poll the task until it
+   * completes. Polling rather than a webhook keeps this working on a developer
+   * machine, which Magnific cannot call back.
+   */
+  private async generateWithMagnific(
+    prompt: string,
+    aspect: ArtworkAspect,
+    style?: ArtworkRequest['style'],
+  ): Promise<Buffer> {
+    const apiKey = await this.magnificKey();
+    const base =
+      ((await this.credentialsService.get('MAGNIFIC_API_URL')) || 'https://api.magnific.com/v1/ai').replace(/\/+$/, '');
+    const headers = { 'Content-Type': 'application/json', 'x-magnific-api-key': apiKey };
+    const fail = (message: string): never => {
+      this.logger.error(`Magnific image generation failed: ${message}`);
+      throw new BadRequestException(`Image generation failed: ${message}`);
+    };
+
+    const submit = await fetch(`${base}/mystic`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        prompt,
+        // "realism" for photographs; "fluid" handles illustration styles better.
+        model: style === 'photographic' ? 'realism' : 'fluid',
+        aspect_ratio: ImageGenerationService.MAGNIFIC_ASPECTS[aspect],
+        resolution: '2k',
+      }),
+      signal: AbortSignal.timeout(30000),
+    });
+    const submitted = (await submit.json().catch(() => ({}))) as any;
+    const taskId = submitted?.data?.task_id;
+    if (!submit.ok || !taskId) {
+      fail(submitted?.message || `HTTP ${submit.status}`);
+    }
+
+    const deadline = Date.now() + 150000;
+    while (Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+      const poll = await fetch(`${base}/mystic/${taskId}`, {
+        headers,
+        signal: AbortSignal.timeout(30000),
+      });
+      const task = ((await poll.json().catch(() => ({}))) as any)?.data || {};
+      if (task.status === 'FAILED') fail('the task failed');
+      if (task.status === 'COMPLETED') {
+        const url = task.generated?.[0];
+        if (!url) fail('the task returned no image');
+        const image = await fetch(url, { signal: AbortSignal.timeout(60000) });
+        if (!image.ok) fail(`could not download the image (HTTP ${image.status})`);
+        return Buffer.from(await image.arrayBuffer());
+      }
+    }
+    return fail('timed out after 150 seconds');
   }
 
   private async generateWithGemini(prompt: string): Promise<Buffer> {

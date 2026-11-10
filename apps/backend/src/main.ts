@@ -2,10 +2,30 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, VersioningType } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import helmet from 'helmet';
+import * as express from 'express';
 import { AppModule } from './app.module';
+import {
+  LOCAL_UPLOAD_DIR,
+  LOCAL_UPLOAD_ROUTE,
+  localUploadsEnabled,
+} from './modules/upload/upload.service';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  // Development only: serve LOCAL_UPLOADS files. Registered before helmet,
+  // whose same-origin resource policy would stop another local app (the
+  // Quick Care webapp on its own port) from showing these images.
+  if (localUploadsEnabled()) {
+    app.use(
+      LOCAL_UPLOAD_ROUTE,
+      (_req: express.Request, res: express.Response, next: express.NextFunction) => {
+        res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+        next();
+      },
+      express.static(LOCAL_UPLOAD_DIR, { fallthrough: false, index: false }),
+    );
+  }
 
   // Security
   app.use(helmet());

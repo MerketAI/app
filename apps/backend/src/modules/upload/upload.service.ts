@@ -7,13 +7,27 @@ import {
 } from '@aws-sdk/client-s3';
 import { CredentialsService } from '../credentials/credentials.service';
 import { v4 as uuidv4 } from 'uuid';
+import { promises as fs, existsSync } from 'fs';
+import * as path from 'path';
 
 export interface UploadResult {
   url: string;
   key: string;
   bucket: string;
-  provider: 'r2' | 's3';
+  provider: 'r2' | 's3' | 'local';
 }
+
+/** Where local-only uploads live, and the route main.ts serves them from. */
+export const LOCAL_UPLOAD_DIR = path.resolve(process.cwd(), 'local-uploads');
+export const LOCAL_UPLOAD_ROUTE = '/local-uploads';
+
+/**
+ * Disk storage for a developer machine with no R2/S3. Opt-in (LOCAL_UPLOADS=true)
+ * and never in production: the URLs are localhost, so Instagram and Facebook
+ * cannot fetch them - they are for previewing drafts locally, not publishing.
+ */
+export const localUploadsEnabled = () =>
+  process.env.LOCAL_UPLOADS === 'true' && process.env.NODE_ENV !== 'production';
 
 const IMAGE_MIME_TYPES = [
   'image/jpeg',
@@ -42,7 +56,7 @@ export class UploadService {
   private readonly logger = new Logger(UploadService.name);
 
   private client: S3Client | null = null;
-  private provider: 'r2' | 's3' = 'r2';
+  private provider: 'r2' | 's3' | 'local' = 'r2';
   private bucket = '';
   private region = 'auto';
   private publicBaseUrl = '';
@@ -50,7 +64,7 @@ export class UploadService {
   constructor(private credentialsService: CredentialsService) {}
 
   private async initializeClient(): Promise<void> {
-    if (this.client) return;
+    if (this.client || this.provider === 'local') return;
 
     const [
       r2AccountId,
@@ -104,6 +118,13 @@ export class UploadService {
       ]);
 
     if (!accessKeyId || !secretAccessKey || !bucket) {
+      if (localUploadsEnabled()) {
+        this.provider = 'local';
+        this.bucket = 'local';
+        this.publicBaseUrl = `${(process.env.APP_URL || `http://localhost:${process.env.PORT || 3002}`).replace(/\/+$/, '')}${LOCAL_UPLOAD_ROUTE}`;
+        this.logger.warn(`Object storage: local disk at ${LOCAL_UPLOAD_DIR} (LOCAL_UPLOADS=true, development only)`);
+        return;
+      }
       throw new BadRequestException(
         'Object storage is not configured. Set R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET and R2_PUBLIC_BASE_URL in admin credentials (or the AWS_* equivalents to use S3).',
       );
@@ -128,6 +149,12 @@ export class UploadService {
   }
 
   private async put(key: string, body: Buffer, contentType: string) {
+    if (this.provider === 'local') {
+      const file = this.localPath(key);
+      await fs.mkdir(path.dirname(file), { recursive: true });
+      await fs.writeFile(file, body);
+      return `${this.publicBaseUrl}/${key}`;
+    }
     await this.client!.send(
       new PutObjectCommand({
         Bucket: this.bucket,
@@ -219,6 +246,10 @@ export class UploadService {
   async objectUrlIfExists(key: string): Promise<string | null> {
     await this.initializeClient();
 
+    if (this.provider === 'local') {
+      return existsSync(this.localPath(key)) ? `${this.publicBaseUrl}/${key}` : null;
+    }
+
     try {
       await this.client!.send(
         new HeadObjectCommand({ Bucket: this.bucket, Key: key }),
@@ -239,9 +270,23 @@ export class UploadService {
     }
   }
 
+  /** Resolves a storage key under LOCAL_UPLOAD_DIR, refusing anything that escapes it. */
+  private localPath(key: string): string {
+    const file = path.resolve(LOCAL_UPLOAD_DIR, key);
+    if (!file.startsWith(LOCAL_UPLOAD_DIR + path.sep)) {
+      throw new BadRequestException('Invalid storage key');
+    }
+    return file;
+  }
+
   async deleteFile(key: string): Promise<void> {
     if (!key) return;
     await this.initializeClient();
+
+    if (this.provider === 'local') {
+      await fs.rm(this.localPath(key), { force: true });
+      return;
+    }
 
     try {
       await this.client!.send(
@@ -257,7 +302,7 @@ export class UploadService {
   /** Reports configuration state without throwing, for health checks. */
   async getStatus(): Promise<{
     configured: boolean;
-    provider?: 'r2' | 's3';
+    provider?: 'r2' | 's3' | 'local';
     bucket?: string;
     publicBaseUrl?: string;
     error?: string;

@@ -9,7 +9,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { PrismaService } from '../../prisma/prisma.service';
 import { BusinessService } from '../business/business.service';
 import { CredentialsService } from '../credentials/credentials.service';
-import { DesignService } from '../design/design.service';
+import { PostImageService } from '../design/post-image.service';
 import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 import { AGENT_SYSTEM_PROMPT } from './agent.prompt';
 
@@ -38,13 +38,26 @@ const TOOLS: any[] = [
   {
     name: 'create_post_image',
     description:
-      'Design a branded image for a post and return its public URL. Describe the design in a sentence or two; do not depict real patients.',
+      'Make a finished, branded post image and return its public URL. An image model draws the scene with no text; your headline and points are laid over it exactly as written, so put every word, date and offer in those fields, never in the scene. Do not depict real patients or identifiable people.',
     input_schema: {
       type: 'object',
       properties: {
-        brief: { type: 'string', description: 'What the image should show and say.' },
+        scene: {
+          type: 'string',
+          description: 'What the picture shows, with no words in it: objects, setting, light, mood. E.g. "eyeglasses and a contact lens case on a clean desk by a window, soft morning light".',
+        },
+        headline: { type: 'string', description: 'Main line, a few words. E.g. "FREE Eye Test Camp".' },
+        subheading: { type: 'string', description: 'Date, time or short supporting line.' },
+        points: {
+          type: 'array',
+          items: { type: 'string' },
+          maxItems: 6,
+          description: 'Up to six short lines. Start a line with "50% off" or "FREE" to show it as a badge.',
+        },
+        footer: { type: 'string', description: 'E.g. a co-host or call to action.' },
+        fine_print: { type: 'string', description: 'E.g. "T&C apply".' },
       },
-      required: ['brief'],
+      required: ['scene', 'headline'],
       additionalProperties: false,
     },
   },
@@ -90,7 +103,7 @@ export class AgentService {
     private prisma: PrismaService,
     private credentials: CredentialsService,
     private business: BusinessService,
-    private design: DesignService,
+    private postImages: PostImageService,
     private subscriptions: SubscriptionsService,
   ) {}
 
@@ -217,9 +230,14 @@ export class AgentService {
         });
 
       case 'create_post_image': {
-        // generateDesign resolves to { design }, not the design itself.
-        const { design } = await this.design.generateDesign(userId, { prompt: input.brief } as any);
-        return this.design.exportDesignAsset(userId, design.id, {} as any);
+        return this.postImages.compose(userId, {
+          scene: input.scene,
+          headline: input.headline,
+          subheading: input.subheading,
+          points: input.points,
+          footer: input.footer,
+          finePrint: input.fine_print,
+        });
       }
 
       case 'save_post_draft': {

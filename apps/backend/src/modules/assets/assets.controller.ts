@@ -169,7 +169,7 @@ export class AssetsController {
     if (providers.length === 0) {
       return {
         error:
-          'No image generation provider is configured. Set OPENAI_API_KEY or GEMINI_API_KEY in admin credentials.',
+          'No image generation provider is configured. Set MAGNIFIC_API_KEY, OPENAI_API_KEY or GEMINI_API_KEY in admin credentials.',
         providers: [],
       };
     }

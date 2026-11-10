@@ -28,8 +28,7 @@ function build() {
   const credentials: any = { get: jest.fn().mockResolvedValue('key') };
   const business: any = { getBusinessProfile: jest.fn().mockResolvedValue({ businessName: 'Satya Clinic' }) };
   const design: any = {
-    generateDesign: jest.fn().mockResolvedValue({ design: { id: 'd1' } }),
-    exportDesignAsset: jest.fn().mockResolvedValue({ url: 'https://cdn.test/d1.png' }),
+    compose: jest.fn().mockResolvedValue({ url: 'https://cdn.test/d1.png', provider: 'magnific' }),
   };
   const subscriptions: any = { consumeCredits: jest.fn().mockResolvedValue({}) };
   const service = new AgentService(prisma, credentials, business, design, subscriptions);

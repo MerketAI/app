@@ -95,3 +95,6 @@ aux.*
 creds.txt
 *.creds
 *creds.txt
+
+# LOCAL_UPLOADS=true development storage (apps/backend)
+local-uploads/
