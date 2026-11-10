@@ -103,6 +103,49 @@ describe('AgentService', () => {
     expect(create).toHaveBeenCalledTimes(10);
   });
 
+  describe('revising a draft', () => {
+    const existing = {
+      id: 'draft1', userId: 'u1', status: 'DRAFT', title: 'Camp', caption: 'Old', body: null,
+      hashtags: '["#Eyes"]', mediaUrls: '["https://cdn.test/old.png"]',
+      aiMetadata: JSON.stringify({ source: 'marketing-assistant', platform: 'instagram' }),
+    };
+    const revise = async (row: any, input: any) => {
+      const built = build();
+      built.prisma.content.findFirst = jest.fn().mockResolvedValue(row);
+      built.prisma.content.update = jest.fn().mockImplementation(({ data }) => ({ ...row, ...data }));
+      create
+        .mockResolvedValueOnce(turn('tool_use', toolUse('t1', 'update_post_draft', input)))
+        .mockResolvedValueOnce(turn('end_turn', text('Changed it.')));
+      const result = await built.service.chat('u1', { message: 'make it 40%' });
+      const toolResult = create.mock.calls[1][0].messages.flatMap((m: any) => m.content).find((b: any) => b.type === 'tool_result');
+      return { ...built, result, toolResult };
+    };
+
+    it('changes only the fields given and returns the revised draft', async () => {
+      const { prisma, result } = await revise(existing, { draftId: 'draft1', caption: 'New', mediaUrls: ['https://cdn.test/new.png'] });
+      expect(prisma.content.findFirst).toHaveBeenCalledWith({ where: { id: 'draft1', userId: 'u1' } });
+      expect(prisma.content.update.mock.calls[0][0].data).toEqual({ caption: 'New', mediaUrls: '["https://cdn.test/new.png"]' });
+      expect(result.drafts[0]).toMatchObject({ id: 'draft1', platform: 'instagram', caption: 'New', revised: true, hashtags: ['#Eyes'] });
+    });
+
+    it("cannot touch another provider's draft", async () => {
+      const { prisma, toolResult } = await revise(null, { draftId: 'theirs', caption: 'x' });
+      expect(prisma.content.update).not.toHaveBeenCalled();
+      expect(toolResult).toMatchObject({ is_error: true });
+    });
+
+    it('refuses to change a scheduled or published post', async () => {
+      const { prisma, toolResult } = await revise({ ...existing, status: 'PUBLISHED' }, { draftId: 'draft1', caption: 'x' });
+      expect(prisma.content.update).not.toHaveBeenCalled();
+      expect(JSON.stringify(toolResult)).toContain('no longer a draft');
+    });
+
+    it('will not leave an Instagram draft without an image', async () => {
+      const { prisma } = await revise(existing, { draftId: 'draft1', mediaUrls: [] });
+      expect(prisma.content.update).not.toHaveBeenCalled();
+    });
+  });
+
   it('keeps every block of each turn verbatim for the next request', async () => {
     const { service, stored } = build();
     const thinking = { type: 'thinking', thinking: '', signature: 'sig' };

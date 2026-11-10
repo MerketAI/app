@@ -18,6 +18,8 @@ export interface PostImageInput {
 
 export interface PostImageResult {
   url: string;
+  /** Echoed so a text-only revision can pass it back and reuse the same picture. */
+  scene: string;
   provider: string;
   width: number;
   height: number;
@@ -135,6 +137,15 @@ export class PostImageService {
     });
     this.logger.log(`Post image for ${userId} via ${artwork.provider}`);
 
-    return { url: upload.url, provider: artwork.provider, width: SIZE, height: SIZE, warnings: artwork.warnings };
+    return {
+      url: upload.url,
+      scene: input.scene,
+      provider: artwork.provider,
+      width: SIZE,
+      height: SIZE,
+      warnings: artwork.cached
+        ? [...artwork.warnings, 'Reused the existing picture for this scene (no new image charge).']
+        : artwork.warnings,
+    };
   }
 }

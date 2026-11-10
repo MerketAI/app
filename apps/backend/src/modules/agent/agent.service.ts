@@ -80,6 +80,29 @@ const TOOLS: any[] = [
       additionalProperties: false,
     },
   },
+  {
+    name: 'list_drafts',
+    description: "List the provider's most recent unpublished drafts, newest first, to find one they want changed.",
+    input_schema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'update_post_draft',
+    description:
+      'Revise an existing draft. Pass only the fields that change; the rest stay as they are. Only unpublished drafts can be changed.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        draftId: { type: 'string' },
+        title: { type: 'string' },
+        caption: { type: 'string' },
+        body: { type: 'string' },
+        hashtags: { type: 'array', items: { type: 'string' } },
+        mediaUrls: { type: 'array', items: { type: 'string' }, description: 'Replaces the images, e.g. with a new create_post_image URL.' },
+      },
+      required: ['draftId'],
+      additionalProperties: false,
+    },
+  },
   // Live trends, diseases and local news. Anthropic runs this server-side.
   {
     type: 'web_search_20260209',
@@ -272,8 +295,82 @@ export class AgentService {
         return { saved: true, draftId: draft.id, note: 'Saved as a draft. The provider must publish it.' };
       }
 
+      case 'list_drafts': {
+        const rows = await this.prisma.content.findMany({
+          where: { userId, status: 'DRAFT' },
+          orderBy: { updatedAt: 'desc' },
+          take: 10,
+          select: { id: true, title: true, caption: true, mediaUrls: true, aiMetadata: true, updatedAt: true },
+        });
+        return rows.map((row) => ({
+          draftId: row.id,
+          platform: this.draftPlatform(row.aiMetadata),
+          title: row.title,
+          caption: (row.caption || '').slice(0, 200),
+          mediaUrls: this.parseList(row.mediaUrls),
+          updatedAt: row.updatedAt,
+        }));
+      }
+
+      case 'update_post_draft': {
+        const existing = await this.prisma.content.findFirst({
+          where: { id: input.draftId, userId },
+        });
+        if (!existing) throw new Error('No draft with that id for this provider.');
+        if (existing.status !== 'DRAFT') {
+          throw new Error('That post is no longer a draft (it was scheduled or published), so it cannot be changed here.');
+        }
+        const platform = this.draftPlatform(existing.aiMetadata);
+        const mediaUrls = input.mediaUrls ?? this.parseList(existing.mediaUrls);
+        if (platform === 'instagram' && mediaUrls.length === 0) {
+          throw new Error('Instagram posts need an image; keep the current one or pass a new URL.');
+        }
+        const updated = await this.prisma.content.update({
+          where: { id: existing.id },
+          data: {
+            ...(input.title !== undefined ? { title: input.title } : {}),
+            ...(input.caption !== undefined ? { caption: input.caption } : {}),
+            ...(input.body !== undefined ? { body: input.body || null } : {}),
+            ...(input.hashtags !== undefined ? { hashtags: JSON.stringify(input.hashtags) } : {}),
+            ...(input.mediaUrls !== undefined ? { mediaUrls: JSON.stringify(input.mediaUrls) } : {}),
+          },
+        });
+        drafts.push({
+          id: updated.id,
+          platform,
+          title: updated.title,
+          caption: updated.caption,
+          body: updated.body || '',
+          hashtags: this.parseList(updated.hashtags),
+          mediaUrls,
+          revised: true,
+        });
+        return { updated: true, draftId: updated.id, note: 'Draft revised. The provider must still publish it.' };
+      }
+
       default:
         throw new Error(`Unknown tool: ${call.name}`);
+    }
+  }
+
+  /** Stored JSON arrays (hashtags, mediaUrls) come back as strings. */
+  private parseList(value: unknown): string[] {
+    if (Array.isArray(value)) return value as string[];
+    try {
+      const parsed = JSON.parse(String(value || '[]'));
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+
+  /** The platform the assistant saved a draft for, from its metadata. */
+  private draftPlatform(aiMetadata: unknown): string | undefined {
+    try {
+      const meta = typeof aiMetadata === 'string' ? JSON.parse(aiMetadata) : aiMetadata;
+      return (meta as any)?.platform;
+    } catch {
+      return undefined;
     }
   }
 
