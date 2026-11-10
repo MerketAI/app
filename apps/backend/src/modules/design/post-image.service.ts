@@ -6,6 +6,7 @@ import { LibraryService } from '../library/library.service';
 import { RendererService } from './renderer.service';
 import { buildPostLayout, PostCopy, PostFormat, PostLayoutInput } from './post-layout';
 import { CreativeSpec, CreativeSpecError, resolveSpec } from './creative-specs';
+import { ArtDirection, composeArtPrompt, pickTheme, ThemeId, THEMES } from './post-themes';
 
 export interface PostImageInput extends PostCopy {
   /** What the picture shows. Drawn by the image model, which never draws text. */
@@ -23,6 +24,10 @@ export interface PostImageInput extends PostCopy {
   height?: number;
   /** Legacy: square | portrait | story | landscape. */
   format?: PostFormat;
+  /** The picture brief; preferred over scene. */
+  artDirection?: ArtDirection;
+  /** Visual theme; picked from the brief when omitted. */
+  theme?: ThemeId;
   /** 'show' the clinic's logo, 'reserve' space for it, or 'none'. Default: show if one is on file. */
   logo?: 'show' | 'reserve' | 'none';
   /** Where to file the post and its picture, e.g. "campaigns/eye-test-camp". */
@@ -55,6 +60,8 @@ export interface PostImageResult {
   /** Echoed so a text-only revision can pass it back and reuse the same picture. */
   scene: string;
   spec: string;
+  /** The visual theme used; pass it again to keep a campaign consistent. */
+  theme: ThemeId;
   provider: string;
   width: number;
   height: number;
@@ -145,10 +152,23 @@ export class PostImageService {
 
   async compose(userId: string, input: PostImageInput): Promise<PostImageResult> {
     if (!input.headline?.trim()) throw new BadRequestException('A post image needs a headline.');
-    if (!input.artworkId && !input.scene?.trim()) {
-      throw new BadRequestException('Describe a scene, or pass artworkId to reuse a library picture.');
+    const direction: ArtDirection | undefined = input.artDirection?.subject?.trim()
+      ? input.artDirection
+      : input.scene?.trim()
+        ? { subject: input.scene, objective: input.artDirection?.objective, occasion: input.artDirection?.occasion }
+        : undefined;
+    if (!input.artworkId && !direction) {
+      throw new BadRequestException('Describe the picture (art direction or scene), or pass artworkId to reuse a library picture.');
     }
     const specs = requestedSpecs(input);
+    const themeId = pickTheme({
+      theme: input.theme,
+      objective: direction?.objective,
+      occasion: direction?.occasion,
+      text: [copyText(input), direction?.subject, direction?.audience].filter(Boolean).join(' '),
+      hasPrice: !!input.price,
+    });
+    const theme = THEMES[themeId];
 
     const profile = await this.prisma.userProfile.findUnique({
       where: { userId },
@@ -173,23 +193,35 @@ export class PostImageService {
         scene: picked.scene || input.scene || '',
       };
     } else {
+      // Names come out of the subject before it is lowercased into the prompt,
+      // so a real person is never depicted and "White Coat" is never taken for one.
+      const { subject, strippedNames } = this.imageGeneration.sanitiseSubject(direction!.subject);
+      const prompt = composeArtPrompt({ ...direction!, subject }, theme);
       const generated = await this.imageGeneration.generate(userId, {
-        subject: input.scene!,
-        style: 'photographic',
+        subject: prompt,
+        style: direction!.style || theme.image.style,
         // Square for every size: the layout crops it around the centred subject.
         aspect: 'square',
         composition: 'subject-right',
-        industry: profile?.industry || undefined,
+        // The generic "calm, clinical" industry line would fight a festive or playful brief.
+        industry: themeId === 'clinical-clean' || themeId === 'premium-editorial' ? profile?.industry || undefined : undefined,
         brandColor: colour,
-        filing: { ...filing, title: input.title ? `${input.title} (picture)` : undefined },
+        filing: {
+          ...filing,
+          tags: [...(input.tags || []), themeId],
+          title: input.title ? `${input.title} (picture)` : undefined,
+          metadata: { theme: themeId, artDirection: direction },
+        },
       });
       if (!generated.cached) await this.subscriptions.consumeCredits(userId, 'ARTWORK_GENERATE');
       artwork = {
         ...generated,
-        scene: input.scene!,
-        warnings: generated.cached
-          ? [...generated.warnings, 'Reused the existing picture for this scene (no new image charge).']
-          : generated.warnings,
+        scene: direction!.subject,
+        warnings: [
+          ...generated.warnings,
+          ...(strippedNames.length ? [`Removed a name from the picture brief (${strippedNames.join(', ')}); generated pictures never show a real, named person.`] : []),
+          ...(generated.cached ? ['Reused the existing picture for this brief (no new image charge).'] : []),
+        ],
       };
     }
 
@@ -203,6 +235,7 @@ export class PostImageService {
       const html = buildPostLayout({
         ...input,
         spec,
+        theme: themeId,
         businessName: profile?.businessName || undefined,
         colour,
         logoUrl: profile?.logoUrl || undefined,
@@ -232,7 +265,7 @@ export class PostImageService {
         {
           kind: 'post',
           ...filing,
-          tags: [...(input.tags || []), spec.platform, spec.placement],
+          tags: [...(input.tags || []), spec.platform, spec.placement, themeId],
           title: `${title} (${spec.label})`,
           notes: input.notes,
           source: artwork.provider,
@@ -247,6 +280,7 @@ export class PostImageService {
             platform: spec.platform,
             placement: spec.placement,
             ratio: spec.ratio,
+            theme: themeId,
             templateId: template?.id ?? null,
             copy: { ...input, scene: undefined },
           },
@@ -273,6 +307,7 @@ export class PostImageService {
       artworkId: artwork.libraryId,
       scene: artwork.scene,
       spec: first.spec,
+      theme: themeId,
       provider: artwork.provider,
       width: first.width,
       height: first.height,

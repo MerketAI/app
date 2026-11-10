@@ -20,7 +20,10 @@ describe('PostImageService.compose', () => {
   const make = (renderer = 'puppeteer', cached = false, picked: any = { id: 'art1', mediaType: 'image', url: 'http://lib.test/art1.png', scene: 'glasses on a desk' }) => {
     const deps = {
       prisma: { userProfile: { findUnique: jest.fn().mockResolvedValue({ businessName: 'Vision Eye Centre', industry: 'Healthcare', brandColors: '#0f766e' }) } },
-      images: { generate: jest.fn().mockResolvedValue({ url: 'http://img.test/a.png', libraryId: 'gen1', provider: 'magnific', cached, warnings: [] }) },
+      images: {
+        generate: jest.fn().mockResolvedValue({ url: 'http://img.test/a.png', libraryId: 'gen1', provider: 'magnific', cached, warnings: [] }),
+        sanitiseSubject: jest.fn((s: string) => (/Dr. [A-Z]/.test(s) ? { subject: 'a doctor', strippedNames: ['Mehta'] } : { subject: s, strippedNames: [] })),
+      },
       renderer: { renderToImage: jest.fn().mockResolvedValue({ renderer, buffer: Buffer.from('png'), warning: 'no chrome' }) },
       library: {
         get: jest.fn().mockResolvedValue(picked),
@@ -37,10 +40,12 @@ describe('PostImageService.compose', () => {
     const { service, images, renderer, subs, library } = make();
     const result = await service.compose('u1', {
       scene: 'glasses on a desk', headline: 'FREE Eye Test Camp', folder: 'campaigns/eye-camp', tags: ['eye-care'], notes: 'Nov camp',
+      theme: 'clinical-clean',
     });
-    expect(images.generate).toHaveBeenCalledWith('u1', expect.objectContaining({
-      subject: 'glasses on a desk', style: 'photographic', filing: expect.objectContaining({ folder: 'campaigns/eye-camp' }),
-    }));
+    const request = images.generate.mock.calls[0][1];
+    expect(request).toMatchObject({ style: 'photographic', aspect: 'square', filing: expect.objectContaining({ folder: 'campaigns/eye-camp' }) });
+    expect(request.subject).toMatch(/^glasses on a desk\. Framing: .*Lighting: soft diffused daylight/);
+    expect(request.subject).toContain('Avoid: needles in skin');
     expect(renderer.renderToImage.mock.calls[0][0]).toContain('FREE Eye Test Camp');
     expect(renderer.renderToImage.mock.calls[0][0]).toContain('Vision Eye Centre');
     expect(subs.consumeCredits).toHaveBeenCalledWith('u1', 'ARTWORK_GENERATE');
@@ -50,10 +55,32 @@ describe('PostImageService.compose', () => {
     expect(layoutFiling).toMatchObject({ kind: 'template', folder: 'campaigns/eye-camp', parentId: 'gen1' });
     const [, , postFiling] = library.store.mock.calls[1];
     expect(postFiling).toMatchObject({
-      kind: 'post', folder: 'campaigns/eye-camp', tags: ['eye-care', 'instagram', 'feed-portrait'], notes: 'Nov camp', parentId: 'gen1',
+      kind: 'post', folder: 'campaigns/eye-camp', tags: ['eye-care', 'instagram', 'feed-portrait', 'clinical-clean'], notes: 'Nov camp', parentId: 'gen1',
       width: 1080, height: 1350, metadata: expect.objectContaining({ spec: 'instagram-feed-portrait', category: 'social', ratio: '4:5' }),
     });
     expect(result).toMatchObject({ url: 'http://cdn.test/post.png', libraryId: 'post1', artworkId: 'gen1', provider: 'magnific', spec: 'instagram-feed-portrait' });
+  });
+
+  it('picks a theme from the brief and uses its picture style, layout and tags', async () => {
+    const { service, images, renderer, library } = make();
+    const result = await service.compose('u1', {
+      headline: 'Happy Diwali', artDirection: { subject: 'a family lighting diyas', objective: 'greeting', occasion: 'Diwali', props: ['Rangoli', 'Marigolds'] },
+    });
+    expect(result.theme).toBe('festive');
+    const request = images.generate.mock.calls[0][1];
+    expect(request.style).toBe('illustration');
+    expect(request.industry).toBeUndefined();
+    expect(request.subject).toContain('a family lighting diyas, with rangoli, marigolds.');
+    expect(request.subject).toContain('Occasion: diwali');
+    expect(renderer.renderToImage.mock.calls[0][0]).toContain('theme-festive');
+    expect(library.store.mock.calls[1][2].tags).toContain('festive');
+  });
+
+  it('takes a named person out of the picture brief and says so', async () => {
+    const { service, images } = make();
+    const result = await service.compose('u1', { headline: 'H', artDirection: { subject: 'Dr. Mehta smiling' } });
+    expect(images.generate.mock.calls[0][1].subject).toMatch(/^a doctor\./);
+    expect(result.warnings.join(' ')).toContain('Removed a name');
   });
 
   it('renders several placements from one picture, skipping duplicate sizes', async () => {

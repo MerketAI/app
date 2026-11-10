@@ -165,7 +165,7 @@ export class ImageGenerationService {
         source: provider,
         prompt,
         scene: subject,
-        metadata: { aspect, style: request.style || 'illustration' },
+        metadata: { ...(request.filing?.metadata || {}), aspect, style: request.style || 'illustration' },
       });
 
     const existing = await this.uploadService.objectUrlIfExists(key);

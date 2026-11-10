@@ -19,6 +19,8 @@
  * order and reports which.
  */
 import { CreativeSpec, familyOf, LayoutFamily, resolveSpec, SafeArea } from './creative-specs';
+import { PostTheme, ThemeColours, ThemeId, THEMES } from './post-themes';
+import { fontImport } from './templates/tokens';
 
 /** The original four formats; still accepted, now mapped to specs. */
 export type PostFormat = 'square' | 'portrait' | 'story' | 'landscape';
@@ -69,7 +71,72 @@ export interface PostLayoutInput extends PostCopy {
   logoUrl?: string;
   /** 'show' uses logoUrl, 'reserve' keeps the space empty, 'none' drops it. */
   logo?: 'show' | 'reserve' | 'none';
+  /** Visual theme; clinical-clean when omitted. */
+  theme?: ThemeId;
 }
+
+/** Theme colours and fonts as CSS custom properties. */
+function themeVariables(theme: PostTheme, c: ThemeColours): string {
+  const vars: Record<string, string> = {
+    '--c': c.primary, '--deep': c.deep, '--accent': c.accent, '--ink': c.ink, '--text': c.text, '--muted': c.muted,
+    '--bg': c.background, '--card': c.card, '--cardBorder': c.cardBorder, '--iconBg': c.iconBg,
+    '--priceFrom': c.priceFrom, '--priceTo': c.priceTo, '--priceBlock': c.priceBlock, '--priceBlockText': c.priceBlockText,
+    '--ctaFrom': c.ctaFrom, '--ctaTo': c.ctaTo, '--ctaText': c.ctaText,
+    '--footFrom': c.footerFrom, '--footTo': c.footerTo, '--footText': c.footerText,
+    '--decor': c.decor, '--decorAlt': c.decorAlt,
+    '--display': theme.type.display, '--body': theme.type.body,
+    // Display faces differ in optical size; scale headline and price, not via zoom (it confuses the fit pass).
+    '--ds': String(theme.type.displayScale),
+  };
+  return Object.entries(vars).map(([k, v]) => `${k}:${v}`).join(';');
+}
+
+/** Style differences between themes, layered over the shared layout. */
+function themeOverrides(theme: PostTheme): string {
+  const css: string[] = [];
+  if (theme.headlineCase === 'upper') css.push('h1{text-transform:uppercase;letter-spacing:0}');
+  if (theme.priceStyle === 'block') {
+    css.push(
+      '.price{background:var(--priceBlock);color:var(--priceBlockText);-webkit-background-clip:border-box;background-clip:border-box;align-self:flex-start;padding:.1em .3em .06em;border-radius:calc(var(--u)*24);transform:rotate(-2deg);box-shadow:0 calc(var(--u)*12) calc(var(--u)*30) rgba(0,0,0,.14)}',
+    );
+  }
+  if (theme.cardStyle === 'outline') css.push('.card{box-shadow:none;backdrop-filter:blur(2px)}');
+  if (theme.cardStyle === 'tinted') css.push('.card{box-shadow:0 calc(var(--u)*6) calc(var(--u)*18) rgba(0,0,0,.05)}');
+  if (theme.ctaStyle === 'block') css.push('.cta{border-radius:calc(var(--u)*12);letter-spacing:.08em}');
+  if (theme.dark) css.push('.photo{filter:saturate(1.05)}.card-detail,.items-note{color:var(--muted)}');
+  return css.join('\n');
+}
+
+/** A decorative layer behind the text, per theme. Pure CSS; never covers the photo's subject. */
+function decorationLayer(theme: PostTheme): string {
+  switch (theme.decoration) {
+    case 'rays':
+      return '<div class="decor" style="background:repeating-linear-gradient(135deg,transparent 0 calc(var(--u)*46),color-mix(in srgb,var(--decor) 55%,transparent) calc(var(--u)*46) calc(var(--u)*58));-webkit-mask-image:radial-gradient(circle at 0% 0%,#000,transparent 38%);mask-image:radial-gradient(circle at 0% 0%,#000,transparent 38%)"></div>';
+    case 'blobs':
+      return '<div class="decor"><i style="left:-8%;top:-10%;width:42%;height:42%;background:var(--decor)"></i><i style="left:30%;bottom:6%;width:22%;height:22%;background:var(--decorAlt);opacity:.55"></i></div>';
+    case 'lights': {
+      // Fixed positions, so the same post always renders the same.
+      const spots = [[6, 8, 9], [18, 4, 6], [31, 11, 7], [46, 5, 10], [60, 9, 6], [74, 3, 8], [88, 10, 7], [9, 30, 5], [94, 34, 6], [4, 58, 7], [12, 82, 9], [38, 90, 6], [52, 78, 5]];
+      return `<div class="decor">${spots
+        .map(([x, y, s], i) => `<b style="left:${x}%;top:${y}%;width:calc(var(--u)*${s * 2});height:calc(var(--u)*${s * 2});background:${i % 3 === 0 ? 'var(--decorAlt)' : 'var(--decor)'}"></b>`)
+        .join('')}</div>`;
+    }
+    case 'rules':
+      return '<div class="decor"><hr style="left:calc(var(--u)*64);top:calc(var(--u)*34);width:calc(var(--u)*120)"><hr style="right:calc(var(--u)*40);bottom:calc(var(--u)*30);width:calc(var(--u)*80)"></div>';
+    case 'dots': {
+      const dots = [[5, 6, 18, 'decor'], [22, 3, 10, 'decorAlt'], [40, 8, 14, 'c'], [8, 40, 12, 'decorAlt'], [3, 70, 20, 'decor'], [30, 92, 12, 'c'], [48, 86, 16, 'decorAlt']];
+      return `<div class="decor">${dots.map(([x, y, s, c]) => `<i style="left:${x}%;top:${y}%;width:calc(var(--u)*${s});height:calc(var(--u)*${s});background:var(--${c})"></i>`).join('')}</div>`;
+    }
+    default:
+      return '';
+  }
+}
+
+const DECOR_CSS =
+  '.decor{position:absolute;inset:0;z-index:0;pointer-events:none;overflow:hidden}' +
+  '.decor i{position:absolute;border-radius:50%;opacity:.7}' +
+  '.decor b{position:absolute;border-radius:50%;filter:blur(calc(var(--u)*1.5));box-shadow:0 0 calc(var(--u)*24) calc(var(--u)*6) var(--decor);opacity:.85}' +
+  '.decor hr{position:absolute;margin:0;border:0;height:2px;background:var(--decor)}';
 
 const DEEP = '#0b2f4a';
 const DEFAULT_COLOUR = '#0f766e';
@@ -197,6 +264,8 @@ export function buildPostLayout(input: PostLayoutInput): string {
   const g = FAMILIES[family];
   const safe: SafeArea = { top: 0, right: 0, bottom: 0, left: 0, ...spec.safe };
   const colour = input.colour || DEFAULT_COLOUR;
+  const theme = THEMES[input.theme || 'clinical-clean'] || THEMES['clinical-clean'];
+  const themeVars = themeVariables(theme, theme.colours(colour));
   // One unit = this canvas's share of its family's base canvas, so text and
   // spacing scale with whichever side is tighter.
   const u = Math.min(width / g.baseW, height / g.baseH);
@@ -216,6 +285,9 @@ export function buildPostLayout(input: PostLayoutInput): string {
   const logoMode = input.logo || (input.logoUrl ? 'show' : 'none');
   const hasFooter = footerLines.length > 0 || !!input.finePrint;
   const footerHeight = !hasFooter ? 0 : g.footer[footerLines.length > 2 ? 1 : 0];
+  // A greeting or announcement (no cards or price, a line or two) would sit at the top of an empty
+  // column; centre it instead.
+  const sparse = !items.length && points.length <= 2 && !input.price;
 
   const logo =
     logoMode === 'show' && input.logoUrl
@@ -271,49 +343,52 @@ export function buildPostLayout(input: PostLayoutInput): string {
     : colBottom;
 
   return `<!doctype html><html><head><meta charset="utf-8"><style>
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700;800&family=Inter:wght@400;500;600&display=swap');
-:root{--u:${u}px;--c:${colour};--deep:${DEEP};--k:1}
+${fontImport(theme.type)}
+:root{--u:${u}px;--k:1;${themeVars}}
 *{box-sizing:border-box}
 html,body{margin:0;padding:0;overflow:hidden}
-body{width:${width}px;height:${height}px;font-family:Inter,Arial,sans-serif;color:#1f2d3a}
-.stage{position:relative;width:${width}px;height:${height}px;overflow:hidden;background:radial-gradient(circle at 0% 0%, color-mix(in srgb, var(--c) 16%, white), transparent 55%),radial-gradient(circle at 100% 100%, color-mix(in srgb, var(--deep) 10%, white), transparent 60%),linear-gradient(160deg,#ffffff,color-mix(in srgb, var(--c) 6%, white))}
+body{width:${width}px;height:${height}px;font-family:var(--body);color:var(--text)}
+.stage{position:relative;width:${width}px;height:${height}px;overflow:hidden;background:var(--bg)}
 .photo{position:absolute;z-index:1;${photo};background:url("${esc(input.artworkUrl)}") center ${family === 'story' ? '30%' : 'center'}/cover no-repeat}
-.col{position:absolute;z-index:2;left:${left}px;top:${top}px;bottom:${colMaxBottom}px;width:${colWidth}px;display:flex;flex-direction:column;justify-content:${g.centre ? 'center' : 'flex-start'};gap:calc(var(--u)*${g.centre ? 14 : 22}*var(--k))}
+.col{position:absolute;z-index:2;left:${left}px;top:${top}px;bottom:${colMaxBottom}px;width:${colWidth}px;display:flex;flex-direction:column;justify-content:${g.centre || sparse ? 'center' : 'flex-start'};gap:calc(var(--u)*${g.centre ? 14 : 22}*var(--k))}
 .logo{flex:none;height:calc(var(--u)*80);display:flex;align-items:center}
 .logo img{max-height:100%;max-width:calc(var(--u)*260);object-fit:contain}
-.brand{font-family:Poppins,sans-serif;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--c);font-size:calc(var(--u)*22*var(--k))}
-h1{margin:0;font-family:Poppins,sans-serif;font-weight:800;line-height:1.02;color:var(--deep);font-size:calc(var(--u)*${g.h1}*var(--k));letter-spacing:-.01em}
+.brand{font-family:var(--display);font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--c);font-size:calc(var(--u)*22*var(--k))}
+h1{margin:0;font-family:var(--display);font-weight:800;line-height:1.02;color:var(--ink);font-size:calc(var(--u)*${g.h1}*var(--k)*var(--ds));letter-spacing:-.01em}
 .fit-line{display:block;white-space:nowrap}
-.sub{display:flex;align-items:center;gap:calc(var(--u)*12);font-family:Poppins,sans-serif;font-weight:600;color:var(--c);font-size:calc(var(--u)*28*var(--k))}
+.sub{display:flex;align-items:center;gap:calc(var(--u)*12);font-family:var(--display);font-weight:600;color:var(--c);font-size:calc(var(--u)*28*var(--k))}
 .sub-ico{width:calc(var(--u)*30);height:calc(var(--u)*30)}
 .price-block{display:flex;flex-direction:column;gap:calc(var(--u)*6)}
-.price{font-family:Poppins,sans-serif;font-weight:800;line-height:.95;font-size:calc(var(--u)*${g.price}*var(--k));background:linear-gradient(135deg,var(--c),var(--deep));-webkit-background-clip:text;background-clip:text;color:transparent;padding-bottom:.04em}
-.price-note{font-size:calc(var(--u)*${g.cardsInRow ? 19 : 27}*var(--k));color:#3a4b5a;font-weight:500;line-height:1.3}
+.price{font-family:var(--display);font-weight:800;line-height:.95;font-size:calc(var(--u)*${g.price}*var(--k)*var(--ds));background:linear-gradient(135deg,var(--priceFrom),var(--priceTo));-webkit-background-clip:text;background-clip:text;color:transparent;padding-bottom:.04em}
+.price-note{font-size:calc(var(--u)*${g.cardsInRow ? 19 : 27}*var(--k));color:var(--muted);font-weight:500;line-height:1.3}
 .cards{display:grid;grid-template-columns:repeat(${cardColumns},1fr);gap:calc(var(--u)*14*var(--k))}
-.card{display:flex;align-items:center;gap:calc(var(--u)*18);background:rgba(255,255,255,.96);border:1px solid color-mix(in srgb, var(--c) 18%, white);border-radius:calc(var(--u)*20);padding:calc(var(--u)*16*var(--k)) calc(var(--u)*20);box-shadow:0 calc(var(--u)*8) calc(var(--u)*24) rgba(11,47,74,.08)}
-.card-ico{flex:none;width:calc(var(--u)*62*var(--k));height:calc(var(--u)*62*var(--k));border-radius:50%;display:grid;place-items:center;color:var(--c);background:color-mix(in srgb, var(--c) 12%, white)}
+.card{display:flex;align-items:center;gap:calc(var(--u)*18);background:var(--card);border:1px solid var(--cardBorder);border-radius:calc(var(--u)*20);padding:calc(var(--u)*16*var(--k)) calc(var(--u)*20);box-shadow:0 calc(var(--u)*8) calc(var(--u)*24) rgba(11,47,74,.08)}
+.card-ico{flex:none;width:calc(var(--u)*62*var(--k));height:calc(var(--u)*62*var(--k));border-radius:50%;display:grid;place-items:center;color:var(--c);background:var(--iconBg)}
 .card-ico .ico{width:58%;height:58%}
-.card-label{font-family:Poppins,sans-serif;font-weight:700;color:var(--deep);font-size:calc(var(--u)*27*var(--k));line-height:1.15}
-.card-detail{color:#4a5a68;font-size:calc(var(--u)*21*var(--k));line-height:1.25;margin-top:calc(var(--u)*2)}
+.card-label{font-family:var(--display);font-weight:700;color:var(--ink);font-size:calc(var(--u)*27*var(--k));line-height:1.15}
+.card-detail{color:var(--muted);font-size:calc(var(--u)*21*var(--k));line-height:1.25;margin-top:calc(var(--u)*2)}
 .in-row .card{flex-direction:column;align-items:flex-start;gap:calc(var(--u)*8);padding:calc(var(--u)*12*var(--k))}
 .in-row .card-ico{width:calc(var(--u)*44*var(--k));height:calc(var(--u)*44*var(--k))}
 .in-row .card-label{font-size:calc(var(--u)*22*var(--k))}
 .in-row .card-detail{font-size:calc(var(--u)*17*var(--k))}
-.items-note{color:#4a5a68;font-size:calc(var(--u)*${g.cardsInRow ? 19 : 21}*var(--k));font-style:italic}
+.items-note{color:var(--muted);font-size:calc(var(--u)*${g.cardsInRow ? 19 : 21}*var(--k));font-style:italic}
 .rows{display:grid;gap:calc(var(--u)*12*var(--k))}
-.row{display:flex;align-items:center;gap:calc(var(--u)*14);font-size:calc(var(--u)*25*var(--k));color:#1f2d3a;line-height:1.25}
+.row{display:flex;align-items:center;gap:calc(var(--u)*14);font-size:calc(var(--u)*25*var(--k));color:var(--text);line-height:1.25}
 .row-ico{flex:none;width:calc(var(--u)*30);height:calc(var(--u)*30);color:var(--c)}
-.badge{flex:none;min-width:calc(var(--u)*92);text-align:center;background:var(--c);color:#fff;font-family:Poppins,sans-serif;font-weight:800;border-radius:calc(var(--u)*12);padding:calc(var(--u)*6) calc(var(--u)*10);font-size:calc(var(--u)*23*var(--k))}
+.badge{flex:none;min-width:calc(var(--u)*92);text-align:center;background:var(--c);color:#fff;font-family:var(--display);font-weight:800;border-radius:calc(var(--u)*12);padding:calc(var(--u)*6) calc(var(--u)*10);font-size:calc(var(--u)*23*var(--k))}
 .cta-wrap{flex:none;padding-top:calc(var(--u)*6)}
-.cta{display:inline-flex;align-items:center;gap:calc(var(--u)*14);background:linear-gradient(135deg,var(--c),color-mix(in srgb, var(--c) 70%, var(--deep)));color:#fff;font-family:Poppins,sans-serif;font-weight:700;letter-spacing:.06em;text-transform:uppercase;border-radius:999px;padding:calc(var(--u)*${g.cardsInRow ? 14 : 20}*var(--k)) calc(var(--u)*${g.cardsInRow ? 28 : 36});font-size:calc(var(--u)*${g.cardsInRow ? 20 : 26}*var(--k));box-shadow:0 calc(var(--u)*10) calc(var(--u)*26) color-mix(in srgb, var(--c) 35%, transparent);white-space:nowrap}
+.cta{display:inline-flex;align-items:center;gap:calc(var(--u)*14);background:linear-gradient(135deg,var(--ctaFrom),var(--ctaTo));color:var(--ctaText);font-family:var(--display);font-weight:700;letter-spacing:.06em;text-transform:uppercase;border-radius:999px;padding:calc(var(--u)*${g.cardsInRow ? 14 : 20}*var(--k)) calc(var(--u)*${g.cardsInRow ? 28 : 36});font-size:calc(var(--u)*${g.cardsInRow ? 20 : 26}*var(--k));box-shadow:0 calc(var(--u)*10) calc(var(--u)*26) color-mix(in srgb, var(--ctaFrom) 35%, transparent);white-space:nowrap}
 .cta-ico{width:calc(var(--u)*28);height:calc(var(--u)*28)}
-footer{position:absolute;z-index:3;left:0;right:0;bottom:${footerBottom}px;height:${px(footerHeight)}px;background:linear-gradient(90deg,var(--deep),color-mix(in srgb, var(--deep) 75%, var(--c)));color:#fff;display:flex;align-items:center;justify-content:space-between;gap:calc(var(--u)*24);padding:0 ${safe.right + px(g.pad)}px 0 ${safe.left + px(g.pad)}px}
+footer{position:absolute;z-index:3;left:0;right:0;bottom:${footerBottom}px;height:${px(footerHeight)}px;background:linear-gradient(90deg,var(--footFrom),var(--footTo));color:var(--footText);display:flex;align-items:center;justify-content:space-between;gap:calc(var(--u)*24);padding:0 ${safe.right + px(g.pad)}px 0 ${safe.left + px(g.pad)}px}
 .foot-lines{display:flex;flex-wrap:${g.footerInRow ? 'nowrap' : 'wrap'};gap:calc(var(--u)*10) calc(var(--u)*34);align-items:center;max-width:82%;overflow:hidden}
 .foot-line{display:flex;align-items:center;gap:calc(var(--u)*10);font-size:calc(var(--u)*${g.footerInRow ? 19 : 22});white-space:nowrap}
-.foot-line.first{font-family:Poppins,sans-serif;font-weight:700;font-size:calc(var(--u)*${g.footerInRow ? 19 : 24});${g.footerInRow ? '' : 'width:100%'}}
+.foot-line.first{font-family:var(--display);font-weight:700;font-size:calc(var(--u)*${g.footerInRow ? 19 : 24});${g.footerInRow ? '' : 'width:100%'}}
 .foot-ico{width:calc(var(--u)*24);height:calc(var(--u)*24);opacity:.9;flex:none}
 .fine{font-size:calc(var(--u)*16);opacity:.75;white-space:nowrap;align-self:${g.footerInRow ? 'center' : 'flex-end'};padding-bottom:${g.footerInRow ? 0 : px(22)}px}
-</style></head><body><div class="stage ${family}" data-spec="${esc(spec.id)}">
+${DECOR_CSS}
+${themeOverrides(theme)}
+</style></head><body><div class="stage ${family} theme-${theme.id}" data-spec="${esc(spec.id)}">
+${decorationLayer(theme)}
 <div class="photo"></div>
 <div class="col${g.cardsInRow ? ' in-row' : ''}">
 ${column}

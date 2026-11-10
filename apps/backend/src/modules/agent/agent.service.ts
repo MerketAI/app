@@ -11,6 +11,7 @@ import { BusinessService } from '../business/business.service';
 import { CredentialsService } from '../credentials/credentials.service';
 import { PostImageService } from '../design/post-image.service';
 import { CREATIVE_SPECS, SPEC_IDS } from '../design/creative-specs';
+import { THEME_IDS, THEMES } from '../design/post-themes';
 import { LIBRARY_ROOTS, LibraryService } from '../library/library.service';
 import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 import { AGENT_SYSTEM_PROMPT } from './agent.prompt';
@@ -24,6 +25,9 @@ const DRAFT_TYPES: Record<string, string> = {
   facebook: 'FACEBOOK_IMAGE',
   blog: 'BLOG_POST',
 };
+
+/** One line per theme for the model. Static, so it caches. */
+const THEME_GUIDE = THEME_IDS.map((id) => `${id}: ${THEMES[id].description} Use for: ${THEMES[id].useFor}`).join(' | ');
 
 /** One line per placement for the model: "instagram-story 1080x1920 9:16". Static, so it caches. */
 const SPEC_GUIDE = CREATIVE_SPECS.map((s) => `${s.id} ${s.width}x${s.height} ${s.ratio}`).join('; ');
@@ -47,9 +51,34 @@ const TOOLS: any[] = [
     input_schema: {
       type: 'object',
       properties: {
+        theme: {
+          type: 'string',
+          enum: THEME_IDS,
+          description: `The visual theme (fonts, colours, layout styling and picture style). Pick the one that fits the brief, or the one the provider names; keep it the same across a campaign. ${THEME_GUIDE}`,
+        },
+        art_direction: {
+          type: 'object',
+          description: 'The brief for the picture (no words appear in it). Fill what the provider gave you and decide the rest to suit the theme; anything left out uses the theme default.',
+          properties: {
+            objective: { type: 'string', enum: ['promotion', 'event', 'awareness', 'education', 'greeting', 'announcement', 'hiring'] },
+            audience: { type: 'string', description: 'e.g. "working adults 30-55", "parents of young children".' },
+            tone: { type: 'string', description: 'e.g. "reassuring", "celebratory".' },
+            style: { type: 'string', enum: ['photographic', 'illustration', 'flat-vector', '3d'], description: 'Overrides the theme picture style.' },
+            subject: { type: 'string', description: 'Who or what the picture shows: a role, never a named person. e.g. "a friendly indian woman doctor in a white coat".' },
+            setting: { type: 'string', description: 'e.g. "a bright modern clinic", "a decorated home courtyard at dusk".' },
+            props: { type: 'array', items: { type: 'string' }, maxItems: 6, description: 'e.g. ["stethoscope", "clipboard"], ["diyas", "rangoli"].' },
+            lighting: { type: 'string' },
+            framing: { type: 'string', enum: ['waist-up', 'close-up', 'full-body', 'object', 'scene'] },
+            palette: { type: 'string', description: 'Colours for the picture, e.g. "white, soft teal and pale blue".' },
+            mood: { type: 'string' },
+            occasion: { type: 'string', description: 'Festival or day, e.g. "Diwali", "World Diabetes Day".' },
+          },
+          required: ['subject'],
+          additionalProperties: false,
+        },
         scene: {
           type: 'string',
-          description: 'What the picture shows, with no words in it: subject, setting, light, colours, mood. E.g. "a friendly Indian doctor in a white coat, natural light, bright white and teal clinic". The subject is placed away from the text automatically.',
+          description: 'Short alternative to art_direction: what the picture shows, with no words in it.',
         },
         spec: {
           type: 'string',
@@ -374,6 +403,8 @@ export class AgentService {
       case 'create_post_image': {
         return this.postImages.compose(userId, {
           scene: input.scene,
+          artDirection: input.art_direction,
+          theme: input.theme,
           artworkId: input.artwork_id,
           spec: input.spec,
           specs: input.specs,

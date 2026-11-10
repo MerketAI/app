@@ -39,7 +39,7 @@ describe('buildPostLayout', () => {
     for (const spec of CREATIVE_SPECS) {
       const html = buildPostLayout({ ...base, spec, headline: 'H' });
       expect(html).toContain(`body{width:${spec.width}px;height:${spec.height}px`);
-      expect(html).toContain(`class="stage ${spec.family}" data-spec="${spec.id}"`);
+      expect(html).toContain(`class="stage ${spec.family} theme-clinical-clean" data-spec="${spec.id}"`);
     }
   });
 
@@ -78,6 +78,25 @@ describe('buildPostLayout', () => {
     expect(body(buildPostLayout({ ...base, headline: 'H', logo: 'reserve' }))).toContain('<div class="logo"></div>');
     expect(body(buildPostLayout({ ...base, headline: 'H', logoUrl: 'http://l.test/logo.png' }))).toContain('<img src="http://l.test/logo.png"');
     expect(body(buildPostLayout({ ...base, headline: 'H' }))).not.toContain('class="logo"');
+  });
+
+  it('centres short copy like a greeting, and top-aligns a full brief', () => {
+    const greeting = buildPostLayout({ ...base, headline: 'Happy Diwali', points: ['Stay safe'] });
+    const offer = buildPostLayout({ ...base, headline: 'Checkup', price: '₹599', items: [{ label: 'LFT' }] });
+    expect(greeting).toMatch(/\.col\{[^}]*justify-content:center/);
+    expect(offer).toMatch(/\.col\{[^}]*justify-content:flex-start/);
+  });
+
+  it('applies the theme: fonts, colours, decoration and its own styles', () => {
+    const html = buildPostLayout({ ...base, headline: 'H', price: '₹599', theme: 'bold-promo', colour: '#0f766e' });
+    expect(html).toContain('class="stage square theme-bold-promo"');
+    expect(html).toContain("--display:'Montserrat'");
+    expect(html).toContain('--priceBlock:#ffb703');
+    expect(html).toContain('h1{text-transform:uppercase');
+    expect(html).toContain('<div class="decor"');
+    const festive = buildPostLayout({ ...base, headline: 'H', theme: 'festive' });
+    expect(festive).toContain("--display:'Playfair Display'");
+    expect(festive).toMatch(/<b style="left:/);
   });
 
   it('omits sections that have no copy', () => {
