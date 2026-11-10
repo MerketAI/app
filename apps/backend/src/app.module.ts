@@ -28,6 +28,7 @@ import { VideoModule } from './modules/video/video.module';
 import { TrendsModule } from './modules/trends/trends.module';
 import { AgentModule } from './modules/agent/agent.module';
 import { AssetsModule } from './modules/assets/assets.module';
+import { LibraryModule } from './modules/library/library.module';
 import { PartnerModule } from './modules/partner/partner.module';
 import { SchedulerModule } from './modules/scheduler/scheduler.module';
 import { PartnerLoggingInterceptor } from './modules/partner/partner-logging.interceptor';
@@ -118,6 +119,8 @@ import { PartnerLoggingInterceptor } from './modules/partner/partner-logging.int
     // Trends & Market Intelligence
     TrendsModule,
     AgentModule,
+    // Every generated or imported asset, filed for reuse
+    LibraryModule,
 
     // Cron jobs
     SchedulerModule,

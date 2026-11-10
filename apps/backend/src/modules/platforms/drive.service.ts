@@ -1,16 +1,21 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { UploadService } from '../upload/upload.service';
+import { LibraryService } from '../library/library.service';
 import { PlatformsService } from './platforms.service';
 
 const MAX_BYTES = 25 * 1024 * 1024; // UploadService's own limit
 const ALLOWED = /^(image\/(jpeg|png|webp)|video\/mp4)$/;
 
-/** Copies a file the user picked in Google Drive into public storage, ready to post. */
+/**
+ * Copies a file the user picked in Google Drive into public storage, ready to
+ * post, and files it in their library under uploads/google-drive. Stored per
+ * provider and by content hash: keying on the Drive file name alone let two
+ * providers' "photo.jpg" overwrite each other.
+ */
 @Injectable()
 export class DriveService {
   constructor(
     private platforms: PlatformsService,
-    private upload: UploadService,
+    private library: LibraryService,
   ) {}
 
   async importFile(userId: string, connectionId: string, fileId: string) {
@@ -37,12 +42,22 @@ export class DriveService {
     if (!file.ok) {
       throw new BadRequestException('That file could not be downloaded from Google Drive');
     }
-    const stored = await this.upload.uploadBuffer(Buffer.from(await file.arrayBuffer()), {
-      folder: 'drive-imports',
-      contentType: meta.mimeType,
-      extension: meta.mimeType.split('/')[1].replace('jpeg', 'jpg'),
-      fileName: meta.name,
-    });
-    return { url: stored.url, name: meta.name, mimeType: meta.mimeType };
+    const stored = await this.library.store(
+      userId,
+      {
+        buffer: Buffer.from(await file.arrayBuffer()),
+        mimeType: meta.mimeType,
+        extension: meta.mimeType.split('/')[1].replace('jpeg', 'jpg'),
+        name: meta.name,
+      },
+      {
+        kind: 'upload',
+        folder: 'uploads/google-drive',
+        title: meta.name,
+        source: 'google-drive',
+        metadata: { driveFileId: fileId },
+      },
+    );
+    return { url: stored.url, name: meta.name, mimeType: meta.mimeType, libraryId: stored.id };
   }
 }

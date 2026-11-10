@@ -35,6 +35,7 @@ model User {
   contents            Content[]
   platformConnections PlatformConnection[]
   agentConversations  AgentConversation[]
+  libraryAssets       LibraryAsset[]
   creditTransactions  CreditTransaction[]
   refreshTokens       RefreshToken[]
   payments            Payment[]
@@ -1185,6 +1186,59 @@ model AgentConversation {
 
   @@index([userId, updatedAt])
   @@map("agent_conversations")
+}
+
+/// Every asset a provider generates, renders or pulls in - images, video, GIF,
+/// SVG, HTML, React components, JSON and anything else - filed so it can be
+/// found and reused instead of produced (and paid for) again.
+///
+/// `folder` is the browsable location ("campaigns/eye-test-camp"); `storageKey`
+/// is where the bytes live and stays content-addressed, so identical files are
+/// stored once. Type-specific details go in `metadata` rather than new columns.
+model LibraryAsset {
+  id          String    @id @default(uuid())
+  userId      String    @map("user_id")
+  /// What the file is: image | gif | svg | video | audio | html | react | json | pdf | text | other
+  mediaType   String    @map("media_type")
+  /// What it is for: artwork | post | design | upload | stock | cutout | icon | template | component | data
+  kind        String
+  folder      String
+  title       String?
+  tags        String[]  @default([])
+  notes       String?
+  url         String
+  storageKey  String    @map("storage_key")
+  mimeType    String?   @map("mime_type")
+  extension   String?
+  sizeBytes   Int?      @map("size_bytes")
+  /// sha256 of the bytes; the same file filed twice is found by this.
+  contentHash String?   @map("content_hash")
+  width       Int?
+  height      Int?
+  durationMs  Int?      @map("duration_ms")
+  /// Where it came from: magnific, openai, gemini, render, google-drive, iconscout, stock, assistant...
+  source      String?
+  prompt      String?
+  /// For generated pictures, the scene they show; reusing it reuses the picture.
+  scene       String?
+  /// A derived asset (a finished post) points at what it was built from.
+  parentId    String?   @map("parent_id")
+  metadata    Json?
+  usageCount  Int       @default(0) @map("usage_count")
+  lastUsedAt  DateTime? @map("last_used_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, storageKey])
+  @@index([userId, folder])
+  @@index([userId, mediaType])
+  @@index([userId, kind])
+  @@index([userId, contentHash])
+  @@index([userId, createdAt])
+  @@index([tags], type: Gin)
+  @@map("library_assets")
 }
 
 model AgentMessage {

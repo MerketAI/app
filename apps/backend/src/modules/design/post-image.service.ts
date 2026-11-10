@@ -2,12 +2,19 @@ import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ImageGenerationService } from '../assets/image-generation.service';
 import { SubscriptionsService } from '../subscriptions/subscriptions.service';
-import { UploadService } from '../upload/upload.service';
+import { LibraryService } from '../library/library.service';
 import { RendererService } from './renderer.service';
 
 export interface PostImageInput {
   /** What the picture shows. Drawn by the image model, which never draws text. */
-  scene: string;
+  scene?: string;
+  /** Reuse a picture already in the library instead of drawing a new one. */
+  artworkId?: string;
+  /** Where to file the post and its picture, e.g. "campaigns/eye-test-camp". */
+  folder?: string;
+  title?: string;
+  tags?: string[];
+  notes?: string;
   /** Exact copy, laid over the picture as HTML so it is never misspelt. */
   headline: string;
   subheading?: string;
@@ -18,6 +25,10 @@ export interface PostImageInput {
 
 export interface PostImageResult {
   url: string;
+  /** The finished post in the library. */
+  libraryId?: string;
+  /** The picture it was built on; pass as artworkId to reuse it. */
+  artworkId?: string;
   /** Echoed so a text-only revision can pass it back and reuse the same picture. */
   scene: string;
   provider: string;
@@ -96,27 +107,56 @@ export class PostImageService {
     private prisma: PrismaService,
     private imageGeneration: ImageGenerationService,
     private renderer: RendererService,
-    private uploads: UploadService,
+    private library: LibraryService,
     private subscriptions: SubscriptionsService,
   ) {}
 
   async compose(userId: string, input: PostImageInput): Promise<PostImageResult> {
     if (!input.headline?.trim()) throw new BadRequestException('A post image needs a headline.');
+    if (!input.artworkId && !input.scene?.trim()) {
+      throw new BadRequestException('Describe a scene, or pass artworkId to reuse a library picture.');
+    }
 
     const profile = await this.prisma.userProfile.findUnique({
       where: { userId },
       select: { businessName: true, industry: true, brandColors: true },
     });
     const colour = brandColour(profile?.brandColors);
+    const filing = { folder: input.folder, tags: input.tags };
 
-    const artwork = await this.imageGeneration.generate(userId, {
-      subject: input.scene,
-      style: 'photographic',
-      aspect: 'square',
-      industry: profile?.industry || undefined,
-      brandColor: colour,
-    });
-    if (!artwork.cached) await this.subscriptions.consumeCredits(userId, 'ARTWORK_GENERATE');
+    // Reuse costs nothing: no image-model call, no credits.
+    let artwork: { url: string; libraryId?: string; provider: string; cached: boolean; warnings: string[]; scene: string };
+    if (input.artworkId) {
+      const picked = await this.library.get(userId, input.artworkId);
+      if (!['image', 'gif'].includes(picked.mediaType)) {
+        throw new BadRequestException('That library asset is not a picture.');
+      }
+      artwork = {
+        url: picked.url,
+        libraryId: picked.id,
+        provider: 'library',
+        cached: true,
+        warnings: ['Reused a picture from the library (no new image charge).'],
+        scene: picked.scene || input.scene || '',
+      };
+    } else {
+      const generated = await this.imageGeneration.generate(userId, {
+        subject: input.scene!,
+        style: 'photographic',
+        aspect: 'square',
+        industry: profile?.industry || undefined,
+        brandColor: colour,
+        filing: { ...filing, title: input.title ? `${input.title} (picture)` : undefined },
+      });
+      if (!generated.cached) await this.subscriptions.consumeCredits(userId, 'ARTWORK_GENERATE');
+      artwork = {
+        ...generated,
+        scene: input.scene!,
+        warnings: generated.cached
+          ? [...generated.warnings, 'Reused the existing picture for this scene (no new image charge).']
+          : generated.warnings,
+      };
+    }
 
     const html = buildPostImageHtml({
       ...input,
@@ -130,22 +170,45 @@ export class PostImageService {
       throw new BadRequestException(rendered.warning || 'The post image could not be rendered.');
     }
 
-    const upload = await this.uploads.uploadBuffer(rendered.buffer, {
-      folder: `posts/${userId}`,
-      extension: 'png',
-      contentType: 'image/png',
-    });
+    const copy = [input.headline, input.subheading, ...(input.points || []), input.footer, input.finePrint]
+      .filter(Boolean)
+      .join(' | ');
+    // The layout itself is reusable: re-render it with new copy or a new picture.
+    const template = await this.library
+      .store(
+        userId,
+        { buffer: Buffer.from(html, 'utf-8'), mimeType: 'text/html', extension: 'html', name: `${input.title || input.headline}-layout` },
+        { kind: 'template', ...filing, title: `${input.title || input.headline} (layout)`, source: 'post-image', parentId: artwork.libraryId },
+      )
+      .catch(() => null);
+    const post = await this.library.store(
+      userId,
+      { buffer: rendered.buffer, mimeType: 'image/png', extension: 'png', name: input.title || input.headline },
+      {
+        kind: 'post',
+        ...filing,
+        title: input.title || input.headline,
+        notes: input.notes,
+        source: artwork.provider,
+        scene: artwork.scene,
+        prompt: copy,
+        parentId: artwork.libraryId,
+        width: SIZE,
+        height: SIZE,
+        metadata: { templateId: template?.id ?? null, copy: { ...input, scene: undefined } },
+      },
+    );
     this.logger.log(`Post image for ${userId} via ${artwork.provider}`);
 
     return {
-      url: upload.url,
-      scene: input.scene,
+      url: post.url,
+      libraryId: post.id,
+      artworkId: artwork.libraryId,
+      scene: artwork.scene,
       provider: artwork.provider,
       width: SIZE,
       height: SIZE,
-      warnings: artwork.cached
-        ? [...artwork.warnings, 'Reused the existing picture for this scene (no new image charge).']
-        : artwork.warnings,
+      warnings: artwork.warnings,
     };
   }
 }

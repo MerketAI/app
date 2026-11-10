@@ -2,6 +2,7 @@ import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { createHash } from 'crypto';
 import { CredentialsService } from '../credentials/credentials.service';
 import { UploadService } from '../upload/upload.service';
+import { LibraryService } from '../library/library.service';
 
 export type IconScoutAsset = 'illustration' | '3d' | 'lottie' | 'icon';
 
@@ -66,6 +67,7 @@ export class IconScoutService {
   constructor(
     private credentialsService: CredentialsService,
     private uploadService: UploadService,
+    private library: LibraryService,
   ) {}
 
   async isConfigured(): Promise<boolean> {
@@ -225,6 +227,17 @@ export class IconScoutService {
       fileName: hash,
       extension: format,
       contentType: this.contentTypeFor(format),
+    });
+    // Lottie animations are JSON, so they file as json; icons as svg/png.
+    await this.library.recordQuietly(userId, {
+      kind: 'icon',
+      url: upload.url,
+      storageKey: upload.key,
+      mimeType: this.contentTypeFor(format),
+      extension: format,
+      sizeBytes: buffer.length,
+      source: 'iconscout',
+      metadata: { iconscoutUuid: uuid },
     });
 
     return {

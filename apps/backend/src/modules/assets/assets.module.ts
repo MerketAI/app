@@ -3,6 +3,7 @@ import { PrismaModule } from '../../prisma/prisma.module';
 import { CredentialsModule } from '../credentials/credentials.module';
 import { UploadModule } from '../upload/upload.module';
 import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
+import { LibraryModule } from '../library/library.module';
 import { AssetsService } from './assets.service';
 import { DecorativeService } from './decorative.service';
 import { PhotoService } from './photo.service';
@@ -13,7 +14,7 @@ import { IconScoutService } from './iconscout.service';
 import { AssetsController } from './assets.controller';
 
 @Module({
-  imports: [PrismaModule, CredentialsModule, UploadModule, SubscriptionsModule],
+  imports: [PrismaModule, CredentialsModule, UploadModule, SubscriptionsModule, LibraryModule],
   controllers: [AssetsController],
   providers: [
     AssetsService,

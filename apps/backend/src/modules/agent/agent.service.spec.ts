@@ -31,8 +31,14 @@ function build() {
     compose: jest.fn().mockResolvedValue({ url: 'https://cdn.test/d1.png', provider: 'magnific' }),
   };
   const subscriptions: any = { consumeCredits: jest.fn().mockResolvedValue({}) };
-  const service = new AgentService(prisma, credentials, business, design, subscriptions);
-  return { service, prisma, business, subscriptions, credentials, stored };
+  const library: any = {
+    recordQuietly: jest.fn().mockResolvedValue({ id: 'lib1' }),
+    search: jest.fn().mockResolvedValue({ items: [{ id: 'art1', title: 'Eye camp picture' }], nextCursor: null }),
+    update: jest.fn().mockResolvedValue({ id: 'art1' }),
+    markUsed: jest.fn().mockResolvedValue(undefined),
+  };
+  const service = new AgentService(prisma, credentials, business, design, subscriptions, library);
+  return { service, prisma, business, subscriptions, credentials, stored, library, design };
 }
 
 const post = {
@@ -103,6 +109,35 @@ describe('AgentService', () => {
     expect(create).toHaveBeenCalledTimes(10);
   });
 
+  describe('the asset library', () => {
+    it('searches the library and reuses a picture by id, filing the new post', async () => {
+      const { service, library, design } = build();
+      create
+        .mockResolvedValueOnce(turn('tool_use', toolUse('t1', 'search_library', { query: 'eye camp' })))
+        .mockResolvedValueOnce(turn('tool_use', toolUse('t2', 'create_post_image', {
+          artwork_id: 'art1', headline: 'FREE Eye Test Camp', folder: 'campaigns/eye-camp', tags: ['eye-care'], notes: 'Nov camp',
+        })))
+        .mockResolvedValueOnce(turn('end_turn', text('Done.')));
+      await service.chat('u1', { message: 'Another post for the camp' });
+      expect(library.search).toHaveBeenCalledWith('u1', expect.objectContaining({ query: 'eye camp' }));
+      expect(design.compose).toHaveBeenCalledWith('u1', expect.objectContaining({
+        artworkId: 'art1', folder: 'campaigns/eye-camp', tags: ['eye-care'], notes: 'Nov camp',
+      }));
+    });
+
+    it('files what the provider attaches and counts images used in a draft', async () => {
+      const { service, library } = build();
+      create
+        .mockResolvedValueOnce(turn('tool_use', toolUse('t1', 'save_post_draft', { ...post, mediaUrls: ['https://cdn.test/a.png'] })))
+        .mockResolvedValueOnce(turn('end_turn', text('Saved.')));
+      await service.chat('u1', { message: 'Use my photo', mediaUrls: ['https://qc.test/photo.jpg'] });
+      expect(library.recordQuietly).toHaveBeenCalledWith('u1', expect.objectContaining({
+        kind: 'upload', folder: 'uploads/attached', storageKey: 'external:https://qc.test/photo.jpg', mimeType: 'image/jpeg',
+      }));
+      expect(library.markUsed).toHaveBeenCalledWith('u1', ['https://cdn.test/a.png']);
+    });
+  });
+
   describe('revising a draft', () => {
     const existing = {
       id: 'draft1', userId: 'u1', status: 'DRAFT', title: 'Camp', caption: 'Old', body: null,
@@ -138,6 +173,25 @@ describe('AgentService', () => {
       const { prisma, toolResult } = await revise({ ...existing, status: 'PUBLISHED' }, { draftId: 'draft1', caption: 'x' });
       expect(prisma.content.update).not.toHaveBeenCalled();
       expect(JSON.stringify(toolResult)).toContain('no longer a draft');
+    });
+
+    it('refuses an update that changes nothing, pointing at get_draft', async () => {
+      const { prisma, toolResult } = await revise(existing, { draftId: 'draft1' });
+      expect(prisma.content.update).not.toHaveBeenCalled();
+      expect(JSON.stringify(toolResult)).toContain('get_draft');
+    });
+
+    it('reads a draft in full without changing it', async () => {
+      const built = build();
+      built.prisma.content.findFirst = jest.fn().mockResolvedValue(existing);
+      built.prisma.content.update = jest.fn();
+      create
+        .mockResolvedValueOnce(turn('tool_use', toolUse('t1', 'get_draft', { draftId: 'draft1' })))
+        .mockResolvedValueOnce(turn('end_turn', text('Read it.')));
+      await built.service.chat('u1', { message: 'what did the last post say?' });
+      const toolResult = create.mock.calls[1][0].messages.flatMap((m: any) => m.content).find((b: any) => b.type === 'tool_result');
+      expect(JSON.stringify(toolResult)).toContain('Old');
+      expect(built.prisma.content.update).not.toHaveBeenCalled();
     });
 
     it('will not leave an Instagram draft without an image', async () => {

@@ -12,7 +12,8 @@ describe('ImageGenerationService - Magnific', () => {
       objectUrlIfExists: jest.fn().mockResolvedValue(null),
       uploadBuffer: jest.fn().mockResolvedValue({ url: 'http://cdn.test/art.png', key: 'k' }),
     };
-    return { service: new ImageGenerationService(credentials as any, uploads as any), uploads };
+    const library = { recordQuietly: jest.fn().mockResolvedValue({ id: 'lib1' }) };
+    return { service: new ImageGenerationService(credentials as any, uploads as any, library as any), uploads, library };
   };
 
   it('prefers Magnific and accepts MAGNIFY_API_KEY as an alias', async () => {
@@ -22,7 +23,7 @@ describe('ImageGenerationService - Magnific', () => {
 
   it('submits a Mystic task, polls it and stores the image', async () => {
     jest.useFakeTimers();
-    const { service, uploads } = make({ MAGNIFIC_API_KEY: 'm' });
+    const { service, uploads, library } = make({ MAGNIFIC_API_KEY: 'm' });
     const fetchMock = jest.fn()
       .mockResolvedValueOnce(json(200, { data: { task_id: 't1', status: 'CREATED' } }))
       .mockResolvedValueOnce(json(200, { data: { status: 'IN_PROGRESS' } }))
@@ -41,7 +42,10 @@ describe('ImageGenerationService - Magnific', () => {
     expect(JSON.parse(init.body).prompt).toContain('ABSOLUTELY NO TEXT');
     expect(fetchMock.mock.calls[1][0]).toBe('https://api.magnific.com/v1/ai/mystic/t1');
     expect(uploads.uploadBuffer).toHaveBeenCalled();
-    expect(result).toMatchObject({ provider: 'magnific', url: 'http://cdn.test/art.png', cached: false });
+    expect(result).toMatchObject({ provider: 'magnific', url: 'http://cdn.test/art.png', cached: false, libraryId: 'lib1' });
+    expect(library.recordQuietly).toHaveBeenCalledWith('u1', expect.objectContaining({
+      kind: 'artwork', source: 'magnific', scene: 'glasses on a desk', storageKey: 'k',
+    }));
   });
 
   it('reports a failed task instead of storing anything', async () => {

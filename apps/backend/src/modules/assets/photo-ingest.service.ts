@@ -2,6 +2,7 @@ import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { createHash } from 'crypto';
 import * as sharp from 'sharp';
 import { UploadService } from '../upload/upload.service';
+import { LibraryService } from '../library/library.service';
 
 export interface IngestedPhoto {
   url: string;
@@ -40,7 +41,7 @@ const MAX_SOURCE_BYTES = 20 * 1024 * 1024;
 export class PhotoIngestService {
   private readonly logger = new Logger(PhotoIngestService.name);
 
-  constructor(private uploadService: UploadService) {}
+  constructor(private uploadService: UploadService, private library: LibraryService) {}
 
   /**
    * Downloads, re-encodes and stores a photo. Identical source + fit reuses the
@@ -111,6 +112,19 @@ export class PhotoIngestService {
       extension: 'jpg',
       contentType: 'image/jpeg',
     });
+    await this.library.recordQuietly(userId, {
+      kind: 'stock',
+      folder: 'stock/photos',
+      url: upload.url,
+      storageKey: upload.key,
+      mimeType: 'image/jpeg',
+      extension: 'jpg',
+      sizeBytes: processed.length,
+      width: box.width,
+      height: box.height,
+      source: (() => { try { return new URL(sourceUrl).hostname; } catch { return 'stock'; } })(),
+      metadata: { sourceUrl, sourcePage: options.sourcePage ?? null, attribution: options.attribution ?? null, fit },
+    });
 
     return {
       url: upload.url,
@@ -146,6 +160,16 @@ export class PhotoIngestService {
       fileName: hash,
       extension: 'png',
       contentType: 'image/png',
+    });
+    await this.library.recordQuietly(userId, {
+      kind: 'cutout',
+      url: upload.url,
+      storageKey: upload.key,
+      mimeType: 'image/png',
+      extension: 'png',
+      sizeBytes: processed.length,
+      source: 'cutout',
+      metadata: { transparent: true },
     });
 
     const meta = await sharp(processed).metadata();

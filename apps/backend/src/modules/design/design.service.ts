@@ -10,6 +10,7 @@ import { CredentialsService } from '../credentials/credentials.service';
 import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 import { RendererService } from './renderer.service';
 import { UploadService } from '../upload/upload.service';
+import { LibraryService } from '../library/library.service';
 import { AssetsService } from '../assets/assets.service';
 import { DecorativeService } from '../assets/decorative.service';
 import { buildPalette, moodForIndustry, TYPE_PAIRS } from './templates/tokens';
@@ -125,6 +126,7 @@ export class DesignService {
     private uploadService: UploadService,
     private assetsService: AssetsService,
     private decorativeService: DecorativeService,
+    private library: LibraryService,
   ) {}
 
   // ---- AI Generation ----
@@ -782,6 +784,36 @@ Output the complete HTML document only.`;
           contentType: rendered.contentType,
         });
         hostedUrl = upload.url;
+
+        // File the render and its editable HTML source, so either can be reused.
+        const designFolder = `designs/${String(design.category || 'other').toLowerCase()}`;
+        const source = await this.library
+          .store(
+            userId,
+            {
+              buffer: Buffer.from(design.htmlContent, 'utf-8'),
+              mimeType: 'text/html',
+              extension: 'html',
+              name: `${design.name}-source`,
+            },
+            { kind: 'design', folder: designFolder, title: `${design.name} (HTML source)`, source: 'designer', metadata: { designId } },
+          )
+          .catch(() => null);
+        await this.library.recordQuietly(userId, {
+          kind: 'design',
+          folder: designFolder,
+          title: design.name,
+          url: upload.url,
+          storageKey: upload.key,
+          mimeType: rendered.contentType,
+          extension: rendered.extension,
+          sizeBytes: rendered.buffer.length,
+          width: design.width,
+          height: design.height,
+          source: 'render',
+          parentId: source?.id,
+          metadata: { designId, template: design.template },
+        });
       } catch (error) {
         storageWarning = `Rendered successfully but could not be stored: ${(error as Error).message}`;
         this.logger.warn(storageWarning);

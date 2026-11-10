@@ -10,6 +10,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { BusinessService } from '../business/business.service';
 import { CredentialsService } from '../credentials/credentials.service';
 import { PostImageService } from '../design/post-image.service';
+import { LIBRARY_ROOTS, LibraryService } from '../library/library.service';
 import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 import { AGENT_SYSTEM_PROMPT } from './agent.prompt';
 
@@ -56,8 +57,51 @@ const TOOLS: any[] = [
         },
         footer: { type: 'string', description: 'E.g. a co-host or call to action.' },
         fine_print: { type: 'string', description: 'E.g. "T&C apply".' },
+        artwork_id: {
+          type: 'string',
+          description: 'Reuse a picture from search_library instead of drawing a new one (free, and keeps a campaign consistent). Then scene may be omitted.',
+        },
+        folder: {
+          type: 'string',
+          description: `Library folder, "<root>/<topic>", e.g. "campaigns/eye-test-camp-nov-2026". Roots: ${LIBRARY_ROOTS.join(', ')}.`,
+        },
+        title: { type: 'string', description: 'Short name for the library, e.g. "Eye Test Camp - Instagram".' },
+        tags: { type: 'array', items: { type: 'string' }, maxItems: 12, description: 'Lowercase topic tags, e.g. ["eye-care","camp","offer","lenskart"].' },
+        notes: { type: 'string', description: 'One line on what this is for and what worked, for reuse later.' },
       },
-      required: ['scene', 'headline'],
+      required: ['headline'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'search_library',
+    description:
+      "Search the provider's asset library (images, posts, designs, videos, GIF, SVG, HTML, JSON...) before making something new. Returns short descriptions and URLs, not the files.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Words to match in titles, notes, scenes and tags.' },
+        folder: { type: 'string' },
+        tags: { type: 'array', items: { type: 'string' } },
+        kind: { type: 'string', enum: ['artwork', 'post', 'design', 'upload', 'stock', 'cutout', 'icon', 'template', 'component', 'data'] },
+        media_type: { type: 'string', enum: ['image', 'gif', 'svg', 'video', 'audio', 'html', 'react', 'json', 'pdf', 'text', 'other'] },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'update_library_asset',
+    description: 'Move, rename, retag or add notes to a library asset, e.g. when the provider says what worked.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        asset_id: { type: 'string' },
+        folder: { type: 'string' },
+        title: { type: 'string' },
+        tags: { type: 'array', items: { type: 'string' } },
+        notes: { type: 'string' },
+      },
+      required: ['asset_id'],
       additionalProperties: false,
     },
   },
@@ -84,6 +128,16 @@ const TOOLS: any[] = [
     name: 'list_drafts',
     description: "List the provider's most recent unpublished drafts, newest first, to find one they want changed.",
     input_schema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'get_draft',
+    description: 'Read one draft in full (caption, body, hashtags, images), e.g. to reuse its wording. Read-only.',
+    input_schema: {
+      type: 'object',
+      properties: { draftId: { type: 'string' } },
+      required: ['draftId'],
+      additionalProperties: false,
+    },
   },
   {
     name: 'update_post_draft',
@@ -128,6 +182,7 @@ export class AgentService {
     private business: BusinessService,
     private postImages: PostImageService,
     private subscriptions: SubscriptionsService,
+    private library: LibraryService,
   ) {}
 
   private async client(): Promise<Anthropic> {
@@ -159,6 +214,19 @@ export class AgentService {
     }));
 
     const attached = (input.mediaUrls || []).filter((u) => /^https:\/\//.test(u));
+    // What the provider attaches is filed too, so it can be found and reused later.
+    for (const url of attached) {
+      const extension = (url.split('?')[0].split('.').pop() || '').toLowerCase().slice(0, 8);
+      await this.library.recordQuietly(userId, {
+        kind: 'upload',
+        folder: 'uploads/attached',
+        url,
+        storageKey: `external:${url}`,
+        extension,
+        mimeType: /^(jpe?g|png|webp)$/.test(extension) ? `image/${extension.replace('jpg', 'jpeg')}` : undefined,
+        source: 'provider-upload',
+      });
+    }
     const firstTurn: Anthropic.MessageParam = {
       role: 'user',
       content: [
@@ -255,13 +323,36 @@ export class AgentService {
       case 'create_post_image': {
         return this.postImages.compose(userId, {
           scene: input.scene,
+          artworkId: input.artwork_id,
           headline: input.headline,
           subheading: input.subheading,
           points: input.points,
           footer: input.footer,
           finePrint: input.fine_print,
+          folder: input.folder,
+          title: input.title,
+          tags: input.tags,
+          notes: input.notes,
         });
       }
+
+      case 'search_library':
+        return this.library.search(userId, {
+          query: input.query,
+          folder: input.folder,
+          tags: input.tags,
+          kind: input.kind,
+          mediaType: input.media_type,
+          limit: 10,
+        });
+
+      case 'update_library_asset':
+        return this.library.update(userId, input.asset_id, {
+          folder: input.folder,
+          title: input.title,
+          tags: input.tags,
+          notes: input.notes,
+        });
 
       case 'save_post_draft': {
         const type = DRAFT_TYPES[input.platform];
@@ -292,6 +383,7 @@ export class AgentService {
           mediaUrls: input.mediaUrls || [],
         };
         drafts.push(summary);
+        await this.library.markUsed(userId, input.mediaUrls || []).catch(() => undefined);
         return { saved: true, draftId: draft.id, note: 'Saved as a draft. The provider must publish it.' };
       }
 
@@ -312,7 +404,27 @@ export class AgentService {
         }));
       }
 
+      case 'get_draft': {
+        const row = await this.prisma.content.findFirst({ where: { id: input.draftId, userId } });
+        if (!row) throw new Error('No draft with that id for this provider.');
+        return {
+          draftId: row.id,
+          platform: this.draftPlatform(row.aiMetadata),
+          status: row.status,
+          title: row.title,
+          caption: row.caption,
+          body: row.body || '',
+          hashtags: this.parseList(row.hashtags),
+          mediaUrls: this.parseList(row.mediaUrls),
+        };
+      }
+
       case 'update_post_draft': {
+        const changes = ['title', 'caption', 'body', 'hashtags', 'mediaUrls'].filter((k) => input[k] !== undefined);
+        if (changes.length === 0) {
+          // Without this, the model used an empty update as a way to read a draft.
+          throw new Error('Nothing to change. To read a draft, use get_draft.');
+        }
         const existing = await this.prisma.content.findFirst({
           where: { id: input.draftId, userId },
         });
@@ -345,6 +457,7 @@ export class AgentService {
           mediaUrls,
           revised: true,
         });
+        if (input.mediaUrls) await this.library.markUsed(userId, input.mediaUrls).catch(() => undefined);
         return { updated: true, draftId: updated.id, note: 'Draft revised. The provider must still publish it.' };
       }
 

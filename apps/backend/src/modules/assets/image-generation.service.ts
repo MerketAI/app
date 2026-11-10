@@ -2,6 +2,7 @@ import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { createHash } from 'crypto';
 import { CredentialsService } from '../credentials/credentials.service';
 import { UploadService } from '../upload/upload.service';
+import { LibraryFiling, LibraryService } from '../library/library.service';
 
 export type ImageProviderName = 'magnific' | 'openai' | 'gemini';
 
@@ -18,11 +19,15 @@ export interface ArtworkRequest {
   /** Transparent PNG, for compositing over a layout. OpenAI only. */
   transparent?: boolean;
   provider?: ImageProviderName;
+  /** How to file the picture in the library: folder, title, tags, notes. */
+  filing?: Partial<LibraryFiling>;
 }
 
 export interface ArtworkResult {
   url: string;
   key: string;
+  /** The picture's entry in the asset library, when filing succeeded. */
+  libraryId?: string;
   provider: ImageProviderName;
   prompt: string;
   cached: boolean;
@@ -81,6 +86,7 @@ export class ImageGenerationService {
   constructor(
     private credentialsService: CredentialsService,
     private uploadService: UploadService,
+    private library: LibraryService,
   ) {}
 
   /** Magnific (formerly the Freepik API); MAGNIFY_API_KEY is accepted as an alias. */
@@ -144,11 +150,29 @@ export class ImageGenerationService {
       .slice(0, 32);
     const key = `artwork/${userId}/${hash}.png`;
 
+    const file = (url: string, storageKey: string, bytes?: Buffer) =>
+      this.library.recordQuietly(userId, {
+        ...request.filing,
+        kind: 'artwork',
+        url,
+        storageKey,
+        mimeType: 'image/png',
+        extension: 'png',
+        sizeBytes: bytes?.length,
+        contentHash: bytes ? createHash('sha256').update(bytes).digest('hex') : undefined,
+        source: provider,
+        prompt,
+        scene: subject,
+        metadata: { aspect, style: request.style || 'illustration' },
+      });
+
     const existing = await this.uploadService.objectUrlIfExists(key);
     if (existing) {
+      const filed = await file(existing, key);
       return {
         url: existing,
         key,
+        libraryId: filed?.id,
         provider,
         prompt,
         cached: true,
@@ -174,10 +198,12 @@ export class ImageGenerationService {
       extension: 'png',
       contentType: 'image/png',
     });
+    const filed = await file(upload.url, upload.key, buffer);
 
     return {
       url: upload.url,
       key: upload.key,
+      libraryId: filed?.id,
       provider,
       prompt,
       cached: false,
