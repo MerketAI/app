@@ -217,7 +217,8 @@ export class AgentService {
         });
 
       case 'create_post_image': {
-        const design: any = await this.design.generateDesign(userId, { prompt: input.brief } as any);
+        // generateDesign resolves to { design }, not the design itself.
+        const { design } = await this.design.generateDesign(userId, { prompt: input.brief } as any);
         return this.design.exportDesignAsset(userId, design.id, {} as any);
       }
 

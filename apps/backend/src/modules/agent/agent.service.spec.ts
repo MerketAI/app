@@ -28,7 +28,7 @@ function build() {
   const credentials: any = { get: jest.fn().mockResolvedValue('key') };
   const business: any = { getBusinessProfile: jest.fn().mockResolvedValue({ businessName: 'Satya Clinic' }) };
   const design: any = {
-    generateDesign: jest.fn().mockResolvedValue({ id: 'd1' }),
+    generateDesign: jest.fn().mockResolvedValue({ design: { id: 'd1' } }),
     exportDesignAsset: jest.fn().mockResolvedValue({ url: 'https://cdn.test/d1.png' }),
   };
   const subscriptions: any = { consumeCredits: jest.fn().mockResolvedValue({}) };

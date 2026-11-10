@@ -69,7 +69,7 @@ export class PlatformsController {
   ) {
     const redirectUri = `${this.configService.get('APP_URL')}/api/v1/platforms/oauth/meta/callback`;
     const state = this.makeState(userId, returnUrl);
-    const url = this.platformsService.getMetaAuthUrl(redirectUri, state);
+    const url = await this.platformsService.getMetaAuthUrl(redirectUri, state);
     return { url };
   }
 
@@ -178,7 +178,7 @@ export class PlatformsController {
   async getGoogleAuthUrl(@CurrentUser('id') userId: string) {
     const redirectUri = `${this.configService.get('APP_URL')}/api/v1/platforms/oauth/google/callback`;
     const state = this.makeState(userId);
-    const url = this.platformsService.getGoogleAuthUrl(redirectUri, state);
+    const url = await this.platformsService.getGoogleAuthUrl(redirectUri, state);
     return { url };
   }
 
@@ -211,7 +211,7 @@ export class PlatformsController {
   ) {
     const redirectUri = `${this.configService.get('APP_URL')}/api/v1/platforms/oauth/wordpress/callback`;
     const state = this.makeState(userId);
-    const url = this.platformsService.getWordPressAuthUrl(redirectUri, state, siteUrl);
+    const url = await this.platformsService.getWordPressAuthUrl(redirectUri, state, siteUrl);
     return { url };
   }
 
