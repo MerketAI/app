@@ -137,6 +137,19 @@ const TOOLS: any[] = [
         logo: { type: 'string', enum: ['show', 'reserve', 'none'], description: '"reserve" keeps empty space for a logo; "show" uses the logo on file.' },
         footer: { type: 'string', description: 'A single footer line, e.g. a co-host.' },
         fine_print: { type: 'string', description: 'E.g. "T&C apply".' },
+        mode: {
+          type: 'string',
+          enum: ['designer', 'layout'],
+          description:
+            'designer: an image model designs the whole creative like a graphic designer (most creative and polished), then every word is proofread automatically; a size that fails is remade with layout. layout: exact text laid over a picture; fastest, and best for small text changes, revisions and many sizes.',
+        },
+        logo_url: { type: 'string', description: 'An attached image that is the provider\'s logo, to place exactly as supplied. Otherwise the logo on file is used.' },
+        reference_urls: {
+          type: 'array',
+          items: { type: 'string' },
+          maxItems: 3,
+          description: 'Attached images to follow for style, colours and layout ideas (designer mode). Never copied.',
+        },
         artwork_id: {
           type: 'string',
           description: 'Reuse a picture from search_library instead of drawing a new one (free, and keeps a campaign consistent). Then scene may be omitted.',
@@ -307,12 +320,18 @@ export class AgentService {
         source: 'provider-upload',
       });
     }
+    // Attached pictures are shown to the model, not just linked, so it can tell a
+    // logo from a reference, read brand colours and pick up details like a phone number.
+    const visible = attached.filter((u) => /\.(png|jpe?g|webp|gif)(\?|$)/i.test(u)).slice(0, 4);
     const firstTurn: Anthropic.MessageParam = {
       role: 'user',
       content: [
+        ...visible.map((url) => ({ type: 'image' as const, source: { type: 'url' as const, url } })),
         {
           type: 'text',
-          text: attached.length ? `${text}\n\nAttached media URLs:\n${attached.join('\n')}` : text,
+          text: attached.length
+            ? `${text}\n\nAttached media URLs (in the order shown above):\n${attached.map((u, i) => `${i + 1}. ${u}`).join('\n')}`
+            : text,
         },
       ],
     };
@@ -405,6 +424,9 @@ export class AgentService {
           scene: input.scene,
           artDirection: input.art_direction,
           theme: input.theme,
+          mode: input.mode,
+          logoUrl: input.logo_url,
+          referenceUrls: input.reference_urls,
           artworkId: input.artwork_id,
           spec: input.spec,
           specs: input.specs,

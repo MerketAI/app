@@ -6,7 +6,10 @@ import { LibraryService } from '../library/library.service';
 import { RendererService } from './renderer.service';
 import { buildPostLayout, PostCopy, PostFormat, PostLayoutInput } from './post-layout';
 import { CreativeSpec, CreativeSpecError, resolveSpec } from './creative-specs';
-import { ArtDirection, composeArtPrompt, pickTheme, ThemeId, THEMES } from './post-themes';
+import { ArtDirection, composeArtPrompt, pickTheme, PostTheme, ThemeId, THEMES } from './post-themes';
+import { DesignerService, fetchInputImage } from './designer.service';
+
+type Artwork = { url: string; libraryId?: string; provider: string; cached: boolean; warnings: string[]; scene: string };
 
 export interface PostImageInput extends PostCopy {
   /** What the picture shows. Drawn by the image model, which never draws text. */
@@ -30,6 +33,12 @@ export interface PostImageInput extends PostCopy {
   theme?: ThemeId;
   /** 'show' the clinic's logo, 'reserve' space for it, or 'none'. Default: show if one is on file. */
   logo?: 'show' | 'reserve' | 'none';
+  /** A logo image to use instead of the one on file, e.g. one the provider attached. */
+  logoUrl?: string;
+  /** 'designer': the image model designs the whole creative and it is verified; 'layout' (default): exact-text layout. */
+  mode?: 'layout' | 'designer';
+  /** Style references for designer mode (never copied). */
+  referenceUrls?: string[];
   /** Where to file the post and its picture, e.g. "campaigns/eye-test-camp". */
   folder?: string;
   title?: string;
@@ -47,6 +56,8 @@ export interface RenderedSize {
   ratio: string;
   /** Lines the fit pass had to leave out at this size. */
   dropped: string[];
+  /** How this size was made. */
+  mode: 'layout' | 'designer';
 }
 
 export interface PostImageResult {
@@ -148,6 +159,7 @@ export class PostImageService {
     private renderer: RendererService,
     private library: LibraryService,
     private subscriptions: SubscriptionsService,
+    private designer: DesignerService,
   ) {}
 
   async compose(userId: string, input: PostImageInput): Promise<PostImageResult> {
@@ -157,7 +169,7 @@ export class PostImageService {
       : input.scene?.trim()
         ? { subject: input.scene, objective: input.artDirection?.objective, occasion: input.artDirection?.occasion }
         : undefined;
-    if (!input.artworkId && !direction) {
+    if (!input.artworkId && !direction && input.mode !== 'designer') {
       throw new BadRequestException('Describe the picture (art direction or scene), or pass artworkId to reuse a library picture.');
     }
     const specs = requestedSpecs(input);
@@ -177,8 +189,180 @@ export class PostImageService {
     const colour = brandColour(profile?.brandColors);
     const filing = { folder: input.folder, tags: input.tags };
 
-    // Reuse costs nothing: no image-model call, no credits.
-    let artwork: { url: string; libraryId?: string; provider: string; cached: boolean; warnings: string[]; scene: string };
+    const warnings: string[] = [];
+    if (input.logo === 'show' && !input.logoUrl && !profile?.logoUrl) {
+      warnings.push('No logo is on file for this provider, so the logo space was left out.');
+    }
+    // The picture for the layout engine, made at most once and only if a size needs it
+    // (designer-mode sizes that pass verification never do).
+    let artworkPromise: Promise<Artwork> | null = null;
+    const getArtwork = () => (artworkPromise ||= this.resolveArtwork(userId, input, direction, theme, themeId, profile, colour, filing));
+
+    // Designer mode: the image model designs each size, text included; a size that
+    // fails verification falls back to the layout engine below.
+    const designerOn = input.mode === 'designer' && (await this.designer.isAvailable());
+    if (input.mode === 'designer' && !designerOn) {
+      warnings.push('Designer mode needs OPENAI_API_KEY and ANTHROPIC_API_KEY; used the standard layout instead.');
+    }
+    let designerInputs: { logo?: Buffer; references?: Buffer[]; picture?: string } | null = null;
+    if (designerOn) {
+      const logoUrl = input.logoUrl || profile?.logoUrl || undefined;
+      const [logo, references] = await Promise.all([
+        logoUrl && input.logo !== 'none' ? fetchInputImage(logoUrl).catch((e) => { warnings.push(`The logo could not be used: ${e.message}`); return undefined; }) : undefined,
+        Promise.all((input.referenceUrls || []).slice(0, 3).map((u) => fetchInputImage(u).catch(() => null))).then((list) => list.filter(Boolean) as Buffer[]),
+      ]);
+      const picture = direction
+        ? composeArtPrompt({ ...direction, subject: this.imageGeneration.sanitiseSubject(direction.subject).subject }, theme)
+        : undefined;
+      designerInputs = { logo, references, picture };
+    }
+
+    const sizes: RenderedSize[] = [];
+    for (const spec of specs) {
+      const title = `${input.title || input.headline.replace(/\n|\\n/g, ' ')}`;
+      if (designerInputs) {
+        try {
+          const designed = await this.designer.design({
+            spec,
+            copy: input,
+            theme,
+            picture: designerInputs.picture,
+            businessName: profile?.businessName || undefined,
+            brandColour: colour,
+            logo: designerInputs.logo,
+            references: designerInputs.references,
+          });
+          await this.subscriptions.consumeCredits(userId, 'DESIGN_GENERATE');
+          const post = await this.library.store(
+            userId,
+            { buffer: designed.buffer, mimeType: 'image/png', extension: 'png', name: `${spec.id}-designer-${title}` },
+            {
+              kind: 'post',
+              ...filing,
+              tags: [...(input.tags || []), spec.platform, spec.placement, themeId, 'designer'],
+              title: `${title} (${spec.label}, designer)`,
+              notes: input.notes,
+              source: designed.model,
+              scene: direction?.subject,
+              prompt: copyText(input),
+              width: spec.width,
+              height: spec.height,
+              metadata: {
+                mode: 'designer', spec: spec.id, category: spec.category, platform: spec.platform, placement: spec.placement,
+                ratio: spec.ratio, theme: themeId, attempts: designed.attempts, transcript: designed.verification.transcript,
+                copy: { ...input, scene: undefined },
+              },
+            },
+          );
+          if (designed.attempts > 1) warnings.push(`At ${spec.label} the first design had a text error and was redone; the final one was checked word for word.`);
+          sizes.push({ spec: spec.id, label: spec.label, url: post.url, libraryId: post.id, width: spec.width, height: spec.height, ratio: spec.ratio, dropped: [], mode: 'designer' });
+          continue;
+        } catch (error) {
+          this.logger.warn(`Designer failed at ${spec.id}: ${(error as Error).message}`);
+          warnings.push(`Designer mode could not produce a correct ${spec.label} (${(error as Error).message.replace(/^The designed image did not match the brief: /, 'text errors: ')}), so it was made with the standard layout instead.`);
+        }
+      }
+
+      const artwork = await getArtwork();
+      if (!warnings.includes(artwork.warnings[0])) warnings.push(...artwork.warnings);
+      const html = buildPostLayout({
+        ...input,
+        spec,
+        theme: themeId,
+        businessName: profile?.businessName || undefined,
+        colour,
+        logoUrl: input.logoUrl || profile?.logoUrl || undefined,
+        artworkUrl: artwork.url,
+      });
+      const rendered = await this.renderer.renderToImage(html, spec.width, spec.height, 'png');
+      if (rendered.renderer !== 'puppeteer') {
+        // A placeholder must never become the image a post points at.
+        throw new BadRequestException(rendered.warning || 'The post image could not be rendered.');
+      }
+      const dropped = (rendered.fit?.dropped || []).map((cls) => DROPPED_NAMES[cls.split(' ')[0]] || cls);
+      if (dropped.length) warnings.push(`At ${spec.label} (${spec.width}×${spec.height}) there was no room for ${dropped.join(', ')}.`);
+
+      // The layout itself is reusable: re-render it with new copy or a new picture.
+      const template = await this.library
+        .store(
+          userId,
+          // Placement first: file names are truncated, and the size must survive.
+          { buffer: Buffer.from(html, 'utf-8'), mimeType: 'text/html', extension: 'html', name: `${spec.id}-layout-${title}` },
+          { kind: 'template', ...filing, title: `${title} (${spec.label}, layout)`, source: 'post-image', parentId: artwork.libraryId, metadata: { spec: spec.id } },
+        )
+        .catch(() => null);
+      const post = await this.library.store(
+        userId,
+        { buffer: rendered.buffer, mimeType: 'image/png', extension: 'png', name: `${spec.id}-${title}` },
+        {
+          kind: 'post',
+          ...filing,
+          tags: [...(input.tags || []), spec.platform, spec.placement, themeId],
+          title: `${title} (${spec.label})`,
+          notes: input.notes,
+          source: artwork.provider,
+          scene: artwork.scene,
+          prompt: copyText(input),
+          parentId: artwork.libraryId,
+          width: spec.width,
+          height: spec.height,
+          metadata: {
+            spec: spec.id,
+            category: spec.category,
+            platform: spec.platform,
+            placement: spec.placement,
+            ratio: spec.ratio,
+            theme: themeId,
+            templateId: template?.id ?? null,
+            copy: { ...input, scene: undefined },
+          },
+        },
+      );
+      sizes.push({
+        spec: spec.id,
+        label: spec.label,
+        url: post.url,
+        libraryId: post.id,
+        width: spec.width,
+        height: spec.height,
+        ratio: spec.ratio,
+        dropped,
+        mode: 'layout',
+      });
+    }
+    // Assigned inside getArtwork, which TypeScript's narrowing cannot see.
+    const pending = artworkPromise as Promise<Artwork> | null;
+    const usedArtwork = pending ? await pending : null;
+    this.logger.log(`Post image (${sizes.map((s) => `${s.spec}:${s.mode}`).join(', ')}) for ${userId}`);
+
+    const first = sizes[0];
+    return {
+      url: first.url,
+      libraryId: first.libraryId,
+      sizes,
+      artworkId: usedArtwork?.libraryId,
+      scene: usedArtwork?.scene || direction?.subject || '',
+      spec: first.spec,
+      theme: themeId,
+      provider: usedArtwork?.provider || 'designer',
+      width: first.width,
+      height: first.height,
+      warnings,
+    };
+  }
+
+  /** The layout engine's picture: a library pick, or generated from the art direction. */
+  private async resolveArtwork(
+    userId: string,
+    input: PostImageInput,
+    direction: ArtDirection | undefined,
+    theme: PostTheme,
+    themeId: ThemeId,
+    profile: { industry?: string | null } | null,
+    colour: string,
+    filing: { folder?: string; tags?: string[] },
+  ): Promise<Artwork> {
+    let artwork: Artwork;
     if (input.artworkId) {
       const picked = await this.library.get(userId, input.artworkId);
       if (!['image', 'gif'].includes(picked.mediaType)) {
@@ -225,93 +409,6 @@ export class PostImageService {
       };
     }
 
-    const warnings = [...artwork.warnings];
-    if (input.logo === 'show' && !profile?.logoUrl) {
-      warnings.push('No logo is on file for this provider, so the logo space was left out.');
-    }
-
-    const sizes: RenderedSize[] = [];
-    for (const spec of specs) {
-      const html = buildPostLayout({
-        ...input,
-        spec,
-        theme: themeId,
-        businessName: profile?.businessName || undefined,
-        colour,
-        logoUrl: profile?.logoUrl || undefined,
-        artworkUrl: artwork.url,
-      });
-      const rendered = await this.renderer.renderToImage(html, spec.width, spec.height, 'png');
-      if (rendered.renderer !== 'puppeteer') {
-        // A placeholder must never become the image a post points at.
-        throw new BadRequestException(rendered.warning || 'The post image could not be rendered.');
-      }
-      const dropped = (rendered.fit?.dropped || []).map((cls) => DROPPED_NAMES[cls.split(' ')[0]] || cls);
-      if (dropped.length) warnings.push(`At ${spec.label} (${spec.width}×${spec.height}) there was no room for ${dropped.join(', ')}.`);
-
-      const title = `${input.title || input.headline.replace(/\n|\\n/g, ' ')}`;
-      // The layout itself is reusable: re-render it with new copy or a new picture.
-      const template = await this.library
-        .store(
-          userId,
-          // Placement first: file names are truncated, and the size must survive.
-          { buffer: Buffer.from(html, 'utf-8'), mimeType: 'text/html', extension: 'html', name: `${spec.id}-layout-${title}` },
-          { kind: 'template', ...filing, title: `${title} (${spec.label}, layout)`, source: 'post-image', parentId: artwork.libraryId, metadata: { spec: spec.id } },
-        )
-        .catch(() => null);
-      const post = await this.library.store(
-        userId,
-        { buffer: rendered.buffer, mimeType: 'image/png', extension: 'png', name: `${spec.id}-${title}` },
-        {
-          kind: 'post',
-          ...filing,
-          tags: [...(input.tags || []), spec.platform, spec.placement, themeId],
-          title: `${title} (${spec.label})`,
-          notes: input.notes,
-          source: artwork.provider,
-          scene: artwork.scene,
-          prompt: copyText(input),
-          parentId: artwork.libraryId,
-          width: spec.width,
-          height: spec.height,
-          metadata: {
-            spec: spec.id,
-            category: spec.category,
-            platform: spec.platform,
-            placement: spec.placement,
-            ratio: spec.ratio,
-            theme: themeId,
-            templateId: template?.id ?? null,
-            copy: { ...input, scene: undefined },
-          },
-        },
-      );
-      sizes.push({
-        spec: spec.id,
-        label: spec.label,
-        url: post.url,
-        libraryId: post.id,
-        width: spec.width,
-        height: spec.height,
-        ratio: spec.ratio,
-        dropped,
-      });
-    }
-    this.logger.log(`Post image (${specs.map((s) => s.id).join(', ')}) for ${userId} via ${artwork.provider}`);
-
-    const first = sizes[0];
-    return {
-      url: first.url,
-      libraryId: first.libraryId,
-      sizes,
-      artworkId: artwork.libraryId,
-      scene: artwork.scene,
-      spec: first.spec,
-      theme: themeId,
-      provider: artwork.provider,
-      width: first.width,
-      height: first.height,
-      warnings,
-    };
+    return artwork;
   }
 }

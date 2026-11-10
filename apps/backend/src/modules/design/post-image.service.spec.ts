@@ -31,10 +31,47 @@ describe('PostImageService.compose', () => {
           ({ id: filing.kind === 'post' ? 'post1' : 'tpl1', url: `http://cdn.test/${filing.kind}.${file.extension}` })),
       },
       subs: { consumeCredits: jest.fn().mockResolvedValue({}) },
+      designer: {
+        isAvailable: jest.fn().mockResolvedValue(true),
+        design: jest.fn().mockResolvedValue({ buffer: Buffer.from('designed'), model: 'gpt-image-2.6-flare', attempts: 1, verification: { ok: true, transcript: 'FREE', problems: [] } }),
+      },
     };
-    const service = new PostImageService(deps.prisma as any, deps.images as any, deps.renderer as any, deps.library as any, deps.subs as any);
+    const service = new PostImageService(deps.prisma as any, deps.images as any, deps.renderer as any, deps.library as any, deps.subs as any, deps.designer as any);
     return { service, ...deps };
   };
+
+  describe('designer mode', () => {
+    it('lets the image model design each size, verified, without drawing a separate picture', async () => {
+      const { service, images, renderer, designer, library, subs } = make();
+      const result = await service.compose('u1', { mode: 'designer', headline: 'FULL BODY CHECKUP', price: '₹599', cta: 'BOOK NOW', specs: ['instagram-feed-portrait', 'instagram-story'] });
+      expect(designer.design).toHaveBeenCalledTimes(2);
+      expect(designer.design.mock.calls[0][0]).toMatchObject({ spec: expect.objectContaining({ id: 'instagram-feed-portrait' }), copy: expect.objectContaining({ price: '₹599' }) });
+      expect(images.generate).not.toHaveBeenCalled();
+      expect(renderer.renderToImage).not.toHaveBeenCalled();
+      expect(subs.consumeCredits).toHaveBeenCalledWith('u1', 'DESIGN_GENERATE');
+      expect(library.store.mock.calls[0][2]).toMatchObject({ kind: 'post', source: 'gpt-image-2.6-flare', tags: expect.arrayContaining(['designer']) });
+      expect(result.sizes.map((s) => s.mode)).toEqual(['designer', 'designer']);
+    });
+
+    it('falls back to the exact-text layout for a size that fails verification, and says why', async () => {
+      const { service, designer, images, renderer } = make();
+      designer.design.mockRejectedValueOnce(new Error('The designed image did not match the brief: price reads ₹559'));
+      const result = await service.compose('u1', { mode: 'designer', headline: 'H', price: '₹599', scene: 'a doctor' });
+      expect(images.generate).toHaveBeenCalledTimes(1);
+      expect(renderer.renderToImage).toHaveBeenCalledTimes(1);
+      expect(result.sizes[0].mode).toBe('layout');
+      expect(result.warnings.join(' ')).toContain('text errors: price reads ₹559');
+    });
+
+    it('uses the layout and says so when designer mode is not configured', async () => {
+      const { service, designer } = make();
+      designer.isAvailable.mockResolvedValue(false);
+      const result = await service.compose('u1', { mode: 'designer', headline: 'H', scene: 's' });
+      expect(designer.design).not.toHaveBeenCalled();
+      expect(result.sizes[0].mode).toBe('layout');
+      expect(result.warnings.join(' ')).toContain('Designer mode needs');
+    });
+  });
 
   it('draws the scene without text, lays the copy over it and files post and layout', async () => {
     const { service, images, renderer, subs, library } = make();

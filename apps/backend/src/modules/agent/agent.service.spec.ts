@@ -135,6 +135,10 @@ describe('AgentService', () => {
         kind: 'upload', folder: 'uploads/attached', storageKey: 'external:https://qc.test/photo.jpg', mimeType: 'image/jpeg',
       }));
       expect(library.markUsed).toHaveBeenCalledWith('u1', ['https://cdn.test/a.png']);
+      // The attached photo is shown to the model as an image, not only linked.
+      const firstTurn = create.mock.calls[0][0].messages[0];
+      expect(firstTurn.content[0]).toEqual({ type: 'image', source: { type: 'url', url: 'https://qc.test/photo.jpg' } });
+      expect(firstTurn.content[1].text).toContain('1. https://qc.test/photo.jpg');
     });
   });
 
