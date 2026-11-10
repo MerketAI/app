@@ -65,6 +65,8 @@ export class PlatformsService {
   async getMetaAuthUrl(redirectUri: string, state: string) {
     const clientId = await this.credentialsService.get('META_APP_ID');
     const scopes = [
+      // Required for /me/accounts: without it the provider's Pages never list.
+      'pages_show_list',
       'pages_manage_posts',
       'pages_read_engagement',
       'instagram_basic',
