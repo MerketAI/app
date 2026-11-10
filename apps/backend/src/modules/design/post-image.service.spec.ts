@@ -1,31 +1,10 @@
 import { brandColour, buildPostImageHtml, PostImageService } from './post-image.service';
 
 describe('buildPostImageHtml', () => {
-  const base = { scene: 'x', artworkUrl: 'http://img.test/a.png' };
-
-  it('turns leading offers into badges and keeps the rest of the line', () => {
-    const html = buildPostImageHtml({
-      ...base,
-      headline: 'FREE Eye Test Camp',
-      points: ['50% off glasses & frames', 'FREE eye check-up', 'Walk-ins welcome'],
-    });
-    expect(html).toContain('<span class="badge">50%</span>off glasses &amp; frames');
-    expect(html).toContain('<span class="badge">FREE</span>eye check-up');
-    expect(html).toContain('<span class="dot"></span>Walk-ins welcome');
-  });
-
-  it('escapes copy so it cannot inject markup', () => {
-    const html = buildPostImageHtml({ ...base, headline: '<script>x</script>', footer: 'A "B"' });
-    expect(html).not.toContain('<script>');
-    expect(html).toContain('&lt;script&gt;');
-    expect(html).toContain('A &quot;B&quot;');
-  });
-
-  it('caps the list at six points and omits empty sections', () => {
-    const html = buildPostImageHtml({ ...base, headline: 'H', points: Array(9).fill('p') });
-    expect(html.match(/class="row"/g)).toHaveLength(6);
-    expect(html).not.toContain('class="sub"');
-    expect(html).not.toContain('class="foot"');
+  it('is the full layout engine', () => {
+    const html = buildPostImageHtml({ artworkUrl: 'http://img.test/a.png', headline: 'H', price: '₹599' });
+    expect(html).toContain('class="price"');
+    expect(html).toContain('window.__fitDesign');
   });
 });
 

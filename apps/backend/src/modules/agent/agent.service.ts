@@ -39,23 +39,58 @@ const TOOLS: any[] = [
   {
     name: 'create_post_image',
     description:
-      'Make a finished, branded post image and return its public URL. An image model draws the scene with no text; your headline and points are laid over it exactly as written, so put every word, date and offer in those fields, never in the scene. Do not depict real patients or identifiable people.',
+      'Make a finished, branded post image and return its public URL. An image model draws the scene with no text; every word is laid over it exactly as written, so put all text in the copy fields, never in the scene. Map the brief onto the fields: a price or offer figure goes in price (shown largest), tests/services/features in items (cards with icons), a call to action in cta (a button), contact lines in footer_lines. Do not depict real patients or identifiable people.',
     input_schema: {
       type: 'object',
       properties: {
         scene: {
           type: 'string',
-          description: 'What the picture shows, with no words in it: objects, setting, light, mood. E.g. "eyeglasses and a contact lens case on a clean desk by a window, soft morning light".',
+          description: 'What the picture shows, with no words in it: subject, setting, light, colours, mood. E.g. "a friendly Indian doctor in a white coat, natural light, bright white and teal clinic". The subject is placed away from the text automatically.',
         },
-        headline: { type: 'string', description: 'Main line, a few words. E.g. "FREE Eye Test Camp".' },
+        format: {
+          type: 'string',
+          enum: ['square', 'portrait', 'story', 'landscape'],
+          description: 'square 1080x1080 (default), portrait 1080x1350 (4:5, best for Facebook/Instagram feed), story 1080x1920, landscape 1200x630. Use the size the provider asks for.',
+        },
+        headline: { type: 'string', description: 'Main line. Use \\n for a line break, e.g. "FULL BODY\\nHEALTH CHECKUP".' },
         subheading: { type: 'string', description: 'Date, time or short supporting line.' },
+        price: { type: 'string', description: 'The hero figure, shown largest: "₹599", "50% OFF", "FREE".' },
+        price_note: { type: 'string', description: 'One line under the price.' },
+        items: {
+          type: 'array',
+          maxItems: 8,
+          description: 'Cards with icons, e.g. tests in a package or services.',
+          items: {
+            type: 'object',
+            properties: {
+              label: { type: 'string', description: 'Short name, e.g. "LFT".' },
+              detail: { type: 'string', description: 'e.g. "Liver Function Test".' },
+              icon: {
+                type: 'string',
+                enum: ['liver', 'kidney', 'heart', 'drop', 'eye', 'glasses', 'tooth', 'flask', 'pill', 'stethoscope', 'lungs', 'brain', 'bone', 'thyroid', 'baby', 'shieldcheck', 'check', 'calendar', 'clock', 'tag'],
+                description: 'Optional; picked from the words when omitted.',
+              },
+            },
+            required: ['label'],
+            additionalProperties: false,
+          },
+        },
+        items_note: { type: 'string', description: 'Small line under the cards, e.g. "Contact us for the complete test list."' },
         points: {
           type: 'array',
           items: { type: 'string' },
           maxItems: 6,
-          description: 'Up to six short lines. Start a line with "50% off" or "FREE" to show it as a badge.',
+          description: 'Short lines when cards do not fit the brief. Start a line with "50% off" or "FREE" to show it as a badge.',
         },
-        footer: { type: 'string', description: 'E.g. a co-host or call to action.' },
+        cta: { type: 'string', description: 'Call-to-action button, e.g. "BOOK YOUR CHECKUP TODAY".' },
+        footer_lines: {
+          type: 'array',
+          items: { type: 'string' },
+          maxItems: 4,
+          description: 'Footer band lines: business name first, then phone and location. Placeholders like "[Phone Number]" are kept as written.',
+        },
+        logo: { type: 'string', enum: ['show', 'reserve', 'none'], description: '"reserve" keeps empty space for a logo; "show" uses the logo on file.' },
+        footer: { type: 'string', description: 'A single footer line, e.g. a co-host.' },
         fine_print: { type: 'string', description: 'E.g. "T&C apply".' },
         artwork_id: {
           type: 'string',
@@ -324,9 +359,17 @@ export class AgentService {
         return this.postImages.compose(userId, {
           scene: input.scene,
           artworkId: input.artwork_id,
+          format: input.format,
           headline: input.headline,
           subheading: input.subheading,
+          price: input.price,
+          priceNote: input.price_note,
+          items: input.items,
+          itemsNote: input.items_note,
           points: input.points,
+          cta: input.cta,
+          footerLines: input.footer_lines,
+          logo: input.logo,
           footer: input.footer,
           finePrint: input.fine_print,
           folder: input.folder,

@@ -4,23 +4,22 @@ import { ImageGenerationService } from '../assets/image-generation.service';
 import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 import { LibraryService } from '../library/library.service';
 import { RendererService } from './renderer.service';
+import { buildPostLayout, POST_FORMATS, PostCopy, PostFormat, PostLayoutInput } from './post-layout';
 
-export interface PostImageInput {
+export interface PostImageInput extends PostCopy {
   /** What the picture shows. Drawn by the image model, which never draws text. */
   scene?: string;
   /** Reuse a picture already in the library instead of drawing a new one. */
   artworkId?: string;
+  /** square 1080x1080, portrait 1080x1350, story 1080x1920, landscape 1200x630. */
+  format?: PostFormat;
+  /** 'show' the clinic's logo, 'reserve' space for it, or 'none'. Default: show if one is on file. */
+  logo?: 'show' | 'reserve' | 'none';
   /** Where to file the post and its picture, e.g. "campaigns/eye-test-camp". */
   folder?: string;
   title?: string;
   tags?: string[];
   notes?: string;
-  /** Exact copy, laid over the picture as HTML so it is never misspelt. */
-  headline: string;
-  subheading?: string;
-  points?: string[];
-  footer?: string;
-  finePrint?: string;
 }
 
 export interface PostImageResult {
@@ -31,21 +30,14 @@ export interface PostImageResult {
   artworkId?: string;
   /** Echoed so a text-only revision can pass it back and reuse the same picture. */
   scene: string;
+  format: PostFormat;
   provider: string;
   width: number;
   height: number;
   warnings: string[];
 }
 
-const SIZE = 1080;
 const DEFAULT_COLOUR = '#0f766e';
-
-const escapeHtml = (value: string) =>
-  String(value)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
 
 /** First #rrggbb in whatever shape brandColors was stored in; teal otherwise. */
 export function brandColour(stored: unknown): string {
@@ -53,51 +45,36 @@ export function brandColour(stored: unknown): string {
   return match ? match[0] : DEFAULT_COLOUR;
 }
 
-/**
- * The text card laid over generated artwork. A "NN%" (or "FREE") at the start
- * of a point becomes a badge, so offers read at a glance on a phone.
- */
-export function buildPostImageHtml(
-  input: PostImageInput & { businessName?: string; colour?: string; artworkUrl: string },
-): string {
-  const colour = input.colour || DEFAULT_COLOUR;
-  const points = (input.points || []).slice(0, 6).map((point) => {
-    const badge = point.match(/^\s*(\d{1,3}\s?%|free)\s*(?:off\b)?\s*/i);
-    if (!badge) return `<div class="row"><span class="dot"></span>${escapeHtml(point.trim())}</div>`;
-    const rest = point.slice(badge[0].length).trim();
-    const label = /off\b/i.test(badge[0]) ? `off ${rest}` : rest;
-    return `<div class="row"><span class="badge">${escapeHtml(badge[1].toUpperCase().replace(/\s/g, ''))}</span>${escapeHtml(label)}</div>`;
-  });
+/** Kept for callers of the original single-card layout; now the full engine. */
+export function buildPostImageHtml(input: PostLayoutInput): string {
+  return buildPostLayout(input);
+}
 
-  return `<!doctype html><html><head><meta charset="utf-8"><style>
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;800&display=swap');
-html,body{margin:0;padding:0;overflow:hidden}
-body{width:${SIZE}px;height:${SIZE}px;font-family:Poppins,Arial,sans-serif}
-.stage{position:relative;width:${SIZE}px;height:${SIZE}px;background:#e8f1f0 url("${escapeHtml(input.artworkUrl)}") center/cover no-repeat}
-.card{position:absolute;left:56px;top:56px;width:600px;box-sizing:border-box;padding:44px 44px 34px;background:rgba(255,255,255,.94);border-radius:28px;box-shadow:0 18px 50px rgba(0,40,40,.18)}
-.brand{color:${colour};font-weight:600;letter-spacing:.14em;font-size:20px;text-transform:uppercase}
-h1{margin:10px 0 6px;font-size:60px;line-height:1.04;color:#10302f;font-weight:800}
-.sub{font-size:26px;color:${colour};font-weight:600;margin-bottom:20px}
-.rows{display:grid;gap:12px}
-.row{display:flex;align-items:center;gap:16px;font-size:22px;color:#1d2b2b;line-height:1.25}
-.badge{flex:none;min-width:88px;text-align:center;background:${colour};color:#fff;font-weight:800;border-radius:12px;padding:6px 10px;font-size:22px}
-.dot{flex:none;width:12px;height:12px;border-radius:50%;background:${colour};margin:0 6px}
-.foot{margin-top:22px;display:flex;justify-content:space-between;align-items:flex-end;gap:16px;font-size:19px;color:#2d4040}
-.fine{font-size:14px;color:#5d6f6f;white-space:nowrap}
-</style></head><body><div class="stage"><div class="card">
-${input.businessName ? `<div class="brand">${escapeHtml(input.businessName)}</div>` : ''}
-<h1>${escapeHtml(input.headline)}</h1>
-${input.subheading ? `<div class="sub">${escapeHtml(input.subheading)}</div>` : ''}
-${points.length ? `<div class="rows">${points.join('')}</div>` : ''}
-${input.footer || input.finePrint ? `<div class="foot"><div>${escapeHtml(input.footer || '')}</div><div class="fine">${escapeHtml(input.finePrint || '')}</div></div>` : ''}
-</div></div></body></html>`;
+/** Every piece of copy, in reading order, for the library's search text. */
+function copyText(input: PostCopy): string {
+  return [
+    input.headline?.replace(/\n|\\n/g, ' '),
+    input.subheading,
+    input.price,
+    input.priceNote,
+    ...(input.items || []).map((i) => [i.label, i.detail].filter(Boolean).join(' - ')),
+    input.itemsNote,
+    ...(input.points || []),
+    input.cta,
+    ...(input.footerLines || []),
+    input.footer,
+    input.finePrint,
+  ]
+    .filter(Boolean)
+    .join(' | ');
 }
 
 /**
  * A finished social post image: the configured image model (Magnific first)
- * draws the scene with no text, and the exact copy is composited on top and
- * rendered with Puppeteer. Splitting it this way is what keeps offers, dates
- * and names spelled right - image models garble lettering.
+ * draws the scene with no text, and the exact copy is laid out over it
+ * (post-layout.ts) and rendered with Puppeteer. Splitting it this way is what
+ * keeps offers, prices, dates and names spelled right - image models garble
+ * lettering.
  */
 @Injectable()
 export class PostImageService {
@@ -116,10 +93,12 @@ export class PostImageService {
     if (!input.artworkId && !input.scene?.trim()) {
       throw new BadRequestException('Describe a scene, or pass artworkId to reuse a library picture.');
     }
+    const format: PostFormat = input.format && POST_FORMATS[input.format] ? input.format : 'square';
+    const size = POST_FORMATS[format];
 
     const profile = await this.prisma.userProfile.findUnique({
       where: { userId },
-      select: { businessName: true, industry: true, brandColors: true },
+      select: { businessName: true, industry: true, brandColors: true, logoUrl: true },
     });
     const colour = brandColour(profile?.brandColors);
     const filing = { folder: input.folder, tags: input.tags };
@@ -143,7 +122,9 @@ export class PostImageService {
       const generated = await this.imageGeneration.generate(userId, {
         subject: input.scene!,
         style: 'photographic',
-        aspect: 'square',
+        aspect: size.artwork,
+        // The text column sits left (top, for stories); keep the subject clear of it.
+        composition: format === 'story' ? 'subject-bottom' : 'subject-right',
         industry: profile?.industry || undefined,
         brandColor: colour,
         filing: { ...filing, title: input.title ? `${input.title} (picture)` : undefined },
@@ -158,27 +139,30 @@ export class PostImageService {
       };
     }
 
-    const html = buildPostImageHtml({
+    const html = buildPostLayout({
       ...input,
+      format,
       businessName: profile?.businessName || undefined,
       colour,
+      logoUrl: profile?.logoUrl || undefined,
       artworkUrl: artwork.url,
     });
-    const rendered = await this.renderer.renderToImage(html, SIZE, SIZE, 'png');
+    const rendered = await this.renderer.renderToImage(html, size.width, size.height, 'png');
     if (rendered.renderer !== 'puppeteer') {
       // A placeholder must never become the image a post points at.
       throw new BadRequestException(rendered.warning || 'The post image could not be rendered.');
     }
+    const warnings = [...artwork.warnings];
+    if (input.logo === 'show' && !profile?.logoUrl) {
+      warnings.push('No logo is on file for this provider, so the logo space was left out.');
+    }
 
-    const copy = [input.headline, input.subheading, ...(input.points || []), input.footer, input.finePrint]
-      .filter(Boolean)
-      .join(' | ');
     // The layout itself is reusable: re-render it with new copy or a new picture.
     const template = await this.library
       .store(
         userId,
         { buffer: Buffer.from(html, 'utf-8'), mimeType: 'text/html', extension: 'html', name: `${input.title || input.headline}-layout` },
-        { kind: 'template', ...filing, title: `${input.title || input.headline} (layout)`, source: 'post-image', parentId: artwork.libraryId },
+        { kind: 'template', ...filing, title: `${input.title || input.headline} (layout)`, source: 'post-image', parentId: artwork.libraryId, metadata: { format } },
       )
       .catch(() => null);
     const post = await this.library.store(
@@ -191,24 +175,25 @@ export class PostImageService {
         notes: input.notes,
         source: artwork.provider,
         scene: artwork.scene,
-        prompt: copy,
+        prompt: copyText(input),
         parentId: artwork.libraryId,
-        width: SIZE,
-        height: SIZE,
-        metadata: { templateId: template?.id ?? null, copy: { ...input, scene: undefined } },
+        width: size.width,
+        height: size.height,
+        metadata: { format, templateId: template?.id ?? null, copy: { ...input, scene: undefined } },
       },
     );
-    this.logger.log(`Post image for ${userId} via ${artwork.provider}`);
+    this.logger.log(`Post image (${format}) for ${userId} via ${artwork.provider}`);
 
     return {
       url: post.url,
       libraryId: post.id,
       artworkId: artwork.libraryId,
       scene: artwork.scene,
+      format,
       provider: artwork.provider,
-      width: SIZE,
-      height: SIZE,
-      warnings: artwork.warnings,
+      width: size.width,
+      height: size.height,
+      warnings,
     };
   }
 }

@@ -19,6 +19,8 @@ export interface ArtworkRequest {
   /** Transparent PNG, for compositing over a layout. OpenAI only. */
   transparent?: boolean;
   provider?: ImageProviderName;
+  /** Where the subject goes, leaving the rest clear for the text layer. */
+  composition?: 'subject-right' | 'subject-bottom';
   /** How to file the picture in the library: folder, title, tags, notes. */
   filing?: Partial<LibraryFiling>;
 }
@@ -240,9 +242,14 @@ export class ImageGenerationService {
     // Composition guidance matters because the text layer is composited over
     // this: the subject must not occupy the region the copy will sit in.
     parts.push(
-      aspect === 'portrait'
-        ? 'Composition: subject in the lower two-thirds, uncluttered open space at the top.'
-        : 'Composition: subject to one side, with generous uncluttered open space on the opposite side.',
+      request.composition === 'subject-right'
+        // The post layout crops a central vertical strip of this into its photo
+        // panel, so ask for a centred subject with room around it. (Asking
+        // models to place a subject off-centre proved unreliable.)
+        ? 'Composition: a single main subject, centred horizontally, framed from the waist up with the head in the upper third and clear space above it; plain, softly lit background.'
+        : request.composition === 'subject-bottom' || aspect === 'portrait'
+          ? 'Composition: subject in the lower two-thirds, uncluttered open space at the top.'
+          : 'Composition: subject to one side, with generous uncluttered open space on the opposite side.',
     );
 
     parts.push(
