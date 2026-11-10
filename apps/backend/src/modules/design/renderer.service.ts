@@ -10,6 +10,8 @@ export interface RenderResult {
   contentType: string;
   extension: string;
   warning?: string;
+  /** What the template's fit hook did, when it has one: shrink factor and dropped lines. */
+  fit?: { fitted: boolean; zoom: number; dropped?: string[] };
 }
 
 @Injectable()
@@ -105,6 +107,7 @@ export class RendererService {
         renderer: 'puppeteer',
         contentType: 'image/png',
         extension: 'png',
+        fit: fit || undefined,
       };
     } finally {
       await browser.close().catch(() => undefined);

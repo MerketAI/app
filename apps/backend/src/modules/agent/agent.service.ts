@@ -10,6 +10,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { BusinessService } from '../business/business.service';
 import { CredentialsService } from '../credentials/credentials.service';
 import { PostImageService } from '../design/post-image.service';
+import { CREATIVE_SPECS, SPEC_IDS } from '../design/creative-specs';
 import { LIBRARY_ROOTS, LibraryService } from '../library/library.service';
 import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 import { AGENT_SYSTEM_PROMPT } from './agent.prompt';
@@ -23,6 +24,9 @@ const DRAFT_TYPES: Record<string, string> = {
   facebook: 'FACEBOOK_IMAGE',
   blog: 'BLOG_POST',
 };
+
+/** One line per placement for the model: "instagram-story 1080x1920 9:16". Static, so it caches. */
+const SPEC_GUIDE = CREATIVE_SPECS.map((s) => `${s.id} ${s.width}x${s.height} ${s.ratio}`).join('; ');
 
 const TOOLS: any[] = [
   {
@@ -47,11 +51,23 @@ const TOOLS: any[] = [
           type: 'string',
           description: 'What the picture shows, with no words in it: subject, setting, light, colours, mood. E.g. "a friendly Indian doctor in a white coat, natural light, bright white and teal clinic". The subject is placed away from the text automatically.',
         },
-        format: {
+        spec: {
           type: 'string',
-          enum: ['square', 'portrait', 'story', 'landscape'],
-          description: 'square 1080x1080 (default), portrait 1080x1350 (4:5, best for Facebook/Instagram feed), story 1080x1920, landscape 1200x630. Use the size the provider asks for.',
+          enum: SPEC_IDS,
+          description: `Where the creative will be used; this sets its exact size and ratio. ${SPEC_GUIDE}`,
         },
+        specs: {
+          type: 'array',
+          items: { type: 'string', enum: SPEC_IDS },
+          maxItems: 6,
+          description: 'Several placements at once (e.g. a feed post and a story), all from one picture at no extra image cost. Use instead of spec.',
+        },
+        platform: {
+          type: 'string',
+          description: 'If no spec fits, the platform name gives its default feed size.',
+        },
+        width: { type: 'integer', description: 'Only for an exact size the provider gives that no spec matches (200-4000 px).' },
+        height: { type: 'integer', description: 'With width.' },
         headline: { type: 'string', description: 'Main line. Use \\n for a line break, e.g. "FULL BODY\\nHEALTH CHECKUP".' },
         subheading: { type: 'string', description: 'Date, time or short supporting line.' },
         price: { type: 'string', description: 'The hero figure, shown largest: "₹599", "50% OFF", "FREE".' },
@@ -359,6 +375,12 @@ export class AgentService {
         return this.postImages.compose(userId, {
           scene: input.scene,
           artworkId: input.artwork_id,
+          spec: input.spec,
+          specs: input.specs,
+          platform: input.platform,
+          width: input.width,
+          height: input.height,
+          // Older conversations may still send the four legacy formats.
           format: input.format,
           headline: input.headline,
           subheading: input.subheading,

@@ -1,24 +1,29 @@
 /**
- * Layout engine for finished post images.
+ * Layout engine for finished post images, at any size in creative-specs.ts.
  *
  * The picture comes from an image model and never contains text; everything
  * readable is laid out here as HTML, so prices, dates and names are exact.
- * The text column sits on a soft white fade on the left (top, for stories)
- * and the picture's subject is drawn on the opposite side, so copy never
- * covers a face. A fit pass (window.__fitDesign, run by RendererService once
- * fonts load) shrinks lines that are too wide and the column if it is too
- * tall, instead of letting anything overflow.
+ * The picture sits in a photo panel cropped around its centre (where image
+ * models put the subject), beside or below the text column, so copy never
+ * covers a face.
+ *
+ * Five layout families follow from the canvas ratio: square and portrait
+ * (text left, photo right), story (text top, photo below), landscape and
+ * banner (compact, vertically centred text, cards in a row, slim footer).
+ * Everything is sized in units of the family's base canvas, so any size in
+ * a family scales alike, and text keeps out of each placement's safe area.
+ *
+ * A fit pass (window.__fitDesign, run by RendererService once fonts load)
+ * shrinks over-wide lines and then the whole column; if a short banner still
+ * cannot hold everything, it drops the least important lines in a fixed
+ * order and reports which.
  */
+import { CreativeSpec, familyOf, LayoutFamily, resolveSpec, SafeArea } from './creative-specs';
 
+/** The original four formats; still accepted, now mapped to specs. */
 export type PostFormat = 'square' | 'portrait' | 'story' | 'landscape';
 
-/**
- * Every format uses a square picture, shown in a photo panel and cropped
- * around its centre - where image models reliably put the subject, whatever
- * the prompt says about placement. It also means one picture serves every
- * size of a campaign without being generated again.
- */
-export const POST_FORMATS: Record<PostFormat, { width: number; height: number; artwork: 'square' | 'portrait' | 'landscape' }> = {
+export const POST_FORMATS: Record<PostFormat, { width: number; height: number; artwork: 'square' }> = {
   square: { width: 1080, height: 1080, artwork: 'square' },
   portrait: { width: 1080, height: 1350, artwork: 'square' },
   story: { width: 1080, height: 1920, artwork: 'square' },
@@ -55,6 +60,8 @@ export interface PostCopy {
 }
 
 export interface PostLayoutInput extends PostCopy {
+  /** The canvas: a resolved spec, or a legacy format name. */
+  spec?: CreativeSpec;
   format?: PostFormat;
   artworkUrl: string;
   businessName?: string;
@@ -149,18 +156,55 @@ const footerIcon = (line: string, index: number) =>
 // Layout
 // ---------------------------------------------------------------------------
 
+/** Per-family geometry, in units of the family's base canvas. */
+interface FamilyGeometry {
+  baseW: number;
+  baseH: number;
+  /** Text column width. */
+  col: number;
+  /** Photo panel: 'right' as a % of width, or 'bottom' as a height in units. */
+  photo: { side: 'right'; pct: number } | { side: 'bottom'; height: number };
+  h1: number;
+  price: number;
+  /** Cards side by side (landscape/banner) instead of stacked. */
+  cardsInRow: boolean;
+  /** Vertically centre the column (short canvases). */
+  centre: boolean;
+  /** Footer band height for 1-2 lines / 3+ lines; row footers stay one line. */
+  footer: [number, number];
+  footerInRow: boolean;
+  pad: number;
+}
+
+const FAMILIES: Record<LayoutFamily, FamilyGeometry> = {
+  square: { baseW: 1080, baseH: 1080, col: 600, photo: { side: 'right', pct: 47 }, h1: 84, price: 168, cardsInRow: false, centre: false, footer: [118, 150], footerInRow: false, pad: 64 },
+  portrait: { baseW: 1080, baseH: 1350, col: 600, photo: { side: 'right', pct: 47 }, h1: 84, price: 168, cardsInRow: false, centre: false, footer: [118, 150], footerInRow: false, pad: 64 },
+  story: { baseW: 1080, baseH: 1920, col: 952, photo: { side: 'bottom', height: 1000 }, h1: 84, price: 168, cardsInRow: false, centre: false, footer: [118, 150], footerInRow: false, pad: 64 },
+  landscape: { baseW: 1200, baseH: 630, col: 600, photo: { side: 'right', pct: 46 }, h1: 52, price: 92, cardsInRow: true, centre: true, footer: [72, 72], footerInRow: true, pad: 64 },
+  banner: { baseW: 1920, baseH: 600, col: 1000, photo: { side: 'right', pct: 40 }, h1: 64, price: 110, cardsInRow: true, centre: true, footer: [64, 64], footerInRow: true, pad: 72 },
+};
+
+/** The canvas a layout input describes: its spec, a legacy format, or the default. */
+export function layoutSpec(input: { spec?: CreativeSpec; format?: PostFormat }): CreativeSpec {
+  if (input.spec) return input.spec;
+  return resolveSpec({ spec: input.format || 'square' });
+}
+
 export function buildPostLayout(input: PostLayoutInput): string {
-  const format = POST_FORMATS[input.format || 'square'] ? input.format || 'square' : 'square';
-  const { width, height } = POST_FORMATS[format];
+  const spec = layoutSpec(input);
+  const { width, height } = spec;
+  const family = spec.family || familyOf(width, height);
+  const g = FAMILIES[family];
+  const safe: SafeArea = { top: 0, right: 0, bottom: 0, left: 0, ...spec.safe };
   const colour = input.colour || DEFAULT_COLOUR;
-  const story = format === 'story';
-  const landscape = format === 'landscape';
-  // Everything is sized in units of 1/1080 of the width, so formats scale alike.
-  const u = width / 1080;
+  // One unit = this canvas's share of its family's base canvas, so text and
+  // spacing scale with whichever side is tighter.
+  const u = Math.min(width / g.baseW, height / g.baseH);
+  const px = (units: number) => Math.round(units * u);
 
   const headlineLines = String(input.headline || '').split(/\n|\\n/).map((l) => l.trim()).filter(Boolean);
   const items = (input.items || []).slice(0, 8);
-  const twoColumns = items.length >= 4;
+  const cardColumns = g.cardsInRow ? Math.min(Math.max(items.length, 1), family === 'banner' ? 4 : 3) : items.length >= 4 ? 2 : 1;
   const points = (input.points || []).slice(0, 6).map((point) => {
     const badge = point.match(/^\s*(\d{1,3}\s?%|free)\s*(?:off\b)?\s*/i);
     if (!badge) return `<div class="row">${svg(pickIcon(point), 'ico row-ico')}<span>${esc(point.trim())}</span></div>`;
@@ -171,6 +215,7 @@ export function buildPostLayout(input: PostLayoutInput): string {
   const footerLines = [...(input.footerLines || []), ...(input.footer ? [input.footer] : [])].filter(Boolean).slice(0, 4);
   const logoMode = input.logo || (input.logoUrl ? 'show' : 'none');
   const hasFooter = footerLines.length > 0 || !!input.finePrint;
+  const footerHeight = !hasFooter ? 0 : g.footer[footerLines.length > 2 ? 1 : 0];
 
   const logo =
     logoMode === 'show' && input.logoUrl
@@ -179,22 +224,23 @@ export function buildPostLayout(input: PostLayoutInput): string {
         ? '<div class="logo"></div>'
         : '';
 
+  // data-drop: the fit pass removes these, lowest number first, only if the
+  // column still overflows at the smallest type it allows.
   const column = [
     logo,
-    input.businessName ? `<div class="brand">${esc(input.businessName)}</div>` : '',
+    input.businessName ? `<div class="brand" data-drop="5">${esc(input.businessName)}</div>` : '',
     `<h1>${headlineLines.map((l) => `<span class="fit-line">${esc(l)}</span>`).join('')}</h1>`,
-    input.subheading ? `<div class="sub">${svg(pickIcon(input.subheading, /\d/.test(input.subheading) ? 'calendar' : undefined), 'ico sub-ico')}<span>${esc(input.subheading)}</span></div>` : '',
+    input.subheading ? `<div class="sub" data-drop="4">${svg(pickIcon(input.subheading, /\d/.test(input.subheading) ? 'calendar' : undefined), 'ico sub-ico')}<span>${esc(input.subheading)}</span></div>` : '',
     input.price
-      ? `<div class="price-block"><div class="price"><span class="fit-line">${esc(input.price)}</span></div>${input.priceNote ? `<div class="price-note">${esc(input.priceNote)}</div>` : ''}</div>`
-      : input.priceNote ? `<div class="price-note">${esc(input.priceNote)}</div>` : '',
+      ? `<div class="price-block"><div class="price"><span class="fit-line">${esc(input.price)}</span></div>${input.priceNote ? `<div class="price-note" data-drop="2">${esc(input.priceNote)}</div>` : ''}</div>`
+      : input.priceNote ? `<div class="price-note" data-drop="2">${esc(input.priceNote)}</div>` : '',
     items.length
-      ? `<div class="cards${twoColumns ? ' two' : ''}">${items
+      ? `<div class="cards" data-drop="3">${items
           .map((item) => `<div class="card"><div class="card-ico">${svg(pickIcon(`${item.label} ${item.detail || ''}`, item.icon))}</div><div class="card-text"><div class="card-label">${esc(item.label)}</div>${item.detail ? `<div class="card-detail">${esc(item.detail)}</div>` : ''}</div></div>`)
           .join('')}</div>`
       : '',
-    items.length && input.itemsNote ? `<div class="items-note">${esc(input.itemsNote)}</div>` : '',
-    points.length ? `<div class="rows">${points.join('')}</div>` : '',
-    !items.length && input.itemsNote ? `<div class="items-note">${esc(input.itemsNote)}</div>` : '',
+    input.itemsNote ? `<div class="items-note" data-drop="1">${esc(input.itemsNote)}</div>` : '',
+    points.length ? `<div class="rows" data-drop="3">${points.join('')}</div>` : '',
     input.cta ? `<div class="cta-wrap"><div class="cta"><span>${esc(input.cta)}</span>${svg('arrow', 'ico cta-ico')}</div></div>` : '',
   ].filter(Boolean).join('\n');
 
@@ -204,17 +250,25 @@ export function buildPostLayout(input: PostLayoutInput): string {
         .join('')}</div>${input.finePrint ? `<div class="fine">${esc(input.finePrint)}</div>` : ''}</footer>`
     : '';
 
-  // Text column width, per format (in 1/1080-width units).
-  const columnWidth = story ? 952 : landscape ? 600 : 600;
-  // Landscape is short: a one-row footer, cards side by side.
-  const footerHeight = !hasFooter ? 0 : landscape ? 72 : footerLines.length > 2 ? 150 : 118;
-  // The photo panel: right side, or the lower part for stories. Its inner edge
-  // fades into the background so there is no hard seam.
-  const photo = story
-    ? `left:0;right:0;bottom:calc(var(--u)*${footerHeight});height:calc(var(--u)*760);-webkit-mask-image:linear-gradient(180deg,transparent 0,#000 26%);mask-image:linear-gradient(180deg,transparent 0,#000 26%)`
-    : `top:0;right:0;bottom:calc(var(--u)*${footerHeight});width:${landscape ? 46 : 47}%;-webkit-mask-image:linear-gradient(90deg,transparent 0,#000 24%);mask-image:linear-gradient(90deg,transparent 0,#000 24%)`;
-  const columnMaxHeight = story ? 1080 : height / u - footerHeight - (landscape ? 70 : 120);
-  const cardColumns = landscape ? Math.min(Math.max(items.length, 1), 3) : twoColumns ? 2 : 1;
+  // Where things go, in canvas pixels, respecting the safe area.
+  const left = safe.left + px(g.pad);
+  const top = safe.top + px(family === 'story' ? 90 : family === 'landscape' || family === 'banner' ? 36 : 60);
+  const footerBottom = family === 'story' ? safe.bottom : 0;
+  const colBottom = footerBottom + px(footerHeight) + (g.centre ? px(36) : px(60)) + (family === 'story' ? 0 : safe.bottom);
+  const photoPanelWidth = g.photo.side === 'right' ? Math.round((width * g.photo.pct) / 100) : width;
+  const colWidth =
+    g.photo.side === 'right'
+      ? Math.min(px(g.col), width - left - Math.round(photoPanelWidth * 0.82) - safe.right)
+      : width - left - px(g.pad) - safe.right;
+  const photo =
+    g.photo.side === 'bottom'
+      ? // Runs to the canvas bottom, behind the footer and the app's reply zone, so nothing is left bare.
+        `left:0;right:0;bottom:0;height:${px(g.photo.height)}px;-webkit-mask-image:linear-gradient(180deg,transparent 0,#000 22%);mask-image:linear-gradient(180deg,transparent 0,#000 22%)`
+      : `top:0;right:0;bottom:${px(footerHeight)}px;width:${photoPanelWidth}px;-webkit-mask-image:linear-gradient(90deg,transparent 0,#000 24%);mask-image:linear-gradient(90deg,transparent 0,#000 24%)`;
+  // Story text may run into the photo's faded top fifth, never down to the subject's face.
+  const colMaxBottom = family === 'story' && g.photo.side === 'bottom'
+    ? Math.round(px(g.photo.height) * 0.8)
+    : colBottom;
 
   return `<!doctype html><html><head><meta charset="utf-8"><style>
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700;800&family=Inter:wght@400;500;600&display=swap');
@@ -223,61 +277,56 @@ export function buildPostLayout(input: PostLayoutInput): string {
 html,body{margin:0;padding:0;overflow:hidden}
 body{width:${width}px;height:${height}px;font-family:Inter,Arial,sans-serif;color:#1f2d3a}
 .stage{position:relative;width:${width}px;height:${height}px;overflow:hidden;background:radial-gradient(circle at 0% 0%, color-mix(in srgb, var(--c) 16%, white), transparent 55%),radial-gradient(circle at 100% 100%, color-mix(in srgb, var(--deep) 10%, white), transparent 60%),linear-gradient(160deg,#ffffff,color-mix(in srgb, var(--c) 6%, white))}
-.photo{position:absolute;z-index:1;${photo};background:url("${esc(input.artworkUrl)}") center ${story ? '30%' : 'center'}/cover no-repeat}
-.col{position:absolute;z-index:2;left:calc(var(--u)*64);top:calc(var(--u)*${story ? 90 : 60});width:calc(var(--u)*${columnWidth});max-height:calc(var(--u)*${columnMaxHeight});display:flex;flex-direction:column;gap:calc(var(--u)*22*var(--k))}
-.logo{height:calc(var(--u)*80);display:flex;align-items:center}
+.photo{position:absolute;z-index:1;${photo};background:url("${esc(input.artworkUrl)}") center ${family === 'story' ? '30%' : 'center'}/cover no-repeat}
+.col{position:absolute;z-index:2;left:${left}px;top:${top}px;bottom:${colMaxBottom}px;width:${colWidth}px;display:flex;flex-direction:column;justify-content:${g.centre ? 'center' : 'flex-start'};gap:calc(var(--u)*${g.centre ? 14 : 22}*var(--k))}
+.logo{flex:none;height:calc(var(--u)*80);display:flex;align-items:center}
 .logo img{max-height:100%;max-width:calc(var(--u)*260);object-fit:contain}
 .brand{font-family:Poppins,sans-serif;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--c);font-size:calc(var(--u)*22*var(--k))}
-h1{margin:0;font-family:Poppins,sans-serif;font-weight:800;line-height:1.02;color:var(--deep);font-size:calc(var(--u)*${landscape ? 52 : 84}*var(--k));letter-spacing:-.01em}
+h1{margin:0;font-family:Poppins,sans-serif;font-weight:800;line-height:1.02;color:var(--deep);font-size:calc(var(--u)*${g.h1}*var(--k));letter-spacing:-.01em}
 .fit-line{display:block;white-space:nowrap}
 .sub{display:flex;align-items:center;gap:calc(var(--u)*12);font-family:Poppins,sans-serif;font-weight:600;color:var(--c);font-size:calc(var(--u)*28*var(--k))}
+.sub-ico{width:calc(var(--u)*30);height:calc(var(--u)*30)}
 .price-block{display:flex;flex-direction:column;gap:calc(var(--u)*6)}
-.price{font-family:Poppins,sans-serif;font-weight:800;line-height:.95;font-size:calc(var(--u)*${landscape ? 92 : 168}*var(--k));background:linear-gradient(135deg,var(--c),var(--deep));-webkit-background-clip:text;background-clip:text;color:transparent;padding-bottom:.04em}
-.price-note{font-size:calc(var(--u)*27*var(--k));color:#3a4b5a;font-weight:500;line-height:1.3}
+.price{font-family:Poppins,sans-serif;font-weight:800;line-height:.95;font-size:calc(var(--u)*${g.price}*var(--k));background:linear-gradient(135deg,var(--c),var(--deep));-webkit-background-clip:text;background-clip:text;color:transparent;padding-bottom:.04em}
+.price-note{font-size:calc(var(--u)*${g.cardsInRow ? 19 : 27}*var(--k));color:#3a4b5a;font-weight:500;line-height:1.3}
 .cards{display:grid;grid-template-columns:repeat(${cardColumns},1fr);gap:calc(var(--u)*14*var(--k))}
-.landscape .col{top:calc(var(--u)*36);gap:calc(var(--u)*14*var(--k))}
-.landscape .card{flex-direction:column;align-items:flex-start;gap:calc(var(--u)*8);padding:calc(var(--u)*12*var(--k))}
-.landscape .card-ico{width:calc(var(--u)*44*var(--k));height:calc(var(--u)*44*var(--k))}
-.landscape .card-label{font-size:calc(var(--u)*22*var(--k))}
-.landscape .card-detail{font-size:calc(var(--u)*17*var(--k))}
-.landscape .price-note,.landscape .items-note{font-size:calc(var(--u)*19*var(--k))}
-.landscape .cta{padding:calc(var(--u)*14*var(--k)) calc(var(--u)*28);font-size:calc(var(--u)*20*var(--k))}
-.landscape .foot-lines{flex-wrap:nowrap}
-.landscape .foot-line.first{width:auto}
-.landscape .foot-line,.landscape .foot-line.first{font-size:calc(var(--u)*19)}
 .card{display:flex;align-items:center;gap:calc(var(--u)*18);background:rgba(255,255,255,.96);border:1px solid color-mix(in srgb, var(--c) 18%, white);border-radius:calc(var(--u)*20);padding:calc(var(--u)*16*var(--k)) calc(var(--u)*20);box-shadow:0 calc(var(--u)*8) calc(var(--u)*24) rgba(11,47,74,.08)}
 .card-ico{flex:none;width:calc(var(--u)*62*var(--k));height:calc(var(--u)*62*var(--k));border-radius:50%;display:grid;place-items:center;color:var(--c);background:color-mix(in srgb, var(--c) 12%, white)}
 .card-ico .ico{width:58%;height:58%}
 .card-label{font-family:Poppins,sans-serif;font-weight:700;color:var(--deep);font-size:calc(var(--u)*27*var(--k));line-height:1.15}
 .card-detail{color:#4a5a68;font-size:calc(var(--u)*21*var(--k));line-height:1.25;margin-top:calc(var(--u)*2)}
-.items-note{color:#4a5a68;font-size:calc(var(--u)*21*var(--k));font-style:italic}
+.in-row .card{flex-direction:column;align-items:flex-start;gap:calc(var(--u)*8);padding:calc(var(--u)*12*var(--k))}
+.in-row .card-ico{width:calc(var(--u)*44*var(--k));height:calc(var(--u)*44*var(--k))}
+.in-row .card-label{font-size:calc(var(--u)*22*var(--k))}
+.in-row .card-detail{font-size:calc(var(--u)*17*var(--k))}
+.items-note{color:#4a5a68;font-size:calc(var(--u)*${g.cardsInRow ? 19 : 21}*var(--k));font-style:italic}
 .rows{display:grid;gap:calc(var(--u)*12*var(--k))}
 .row{display:flex;align-items:center;gap:calc(var(--u)*14);font-size:calc(var(--u)*25*var(--k));color:#1f2d3a;line-height:1.25}
 .row-ico{flex:none;width:calc(var(--u)*30);height:calc(var(--u)*30);color:var(--c)}
 .badge{flex:none;min-width:calc(var(--u)*92);text-align:center;background:var(--c);color:#fff;font-family:Poppins,sans-serif;font-weight:800;border-radius:calc(var(--u)*12);padding:calc(var(--u)*6) calc(var(--u)*10);font-size:calc(var(--u)*23*var(--k))}
-.sub-ico{width:calc(var(--u)*30);height:calc(var(--u)*30)}
-.cta-wrap{padding-top:calc(var(--u)*6)}
-.cta{display:inline-flex;align-items:center;gap:calc(var(--u)*14);background:linear-gradient(135deg,var(--c),color-mix(in srgb, var(--c) 70%, var(--deep)));color:#fff;font-family:Poppins,sans-serif;font-weight:700;letter-spacing:.06em;text-transform:uppercase;border-radius:999px;padding:calc(var(--u)*20*var(--k)) calc(var(--u)*36);font-size:calc(var(--u)*26*var(--k));box-shadow:0 calc(var(--u)*10) calc(var(--u)*26) color-mix(in srgb, var(--c) 35%, transparent);white-space:nowrap}
+.cta-wrap{flex:none;padding-top:calc(var(--u)*6)}
+.cta{display:inline-flex;align-items:center;gap:calc(var(--u)*14);background:linear-gradient(135deg,var(--c),color-mix(in srgb, var(--c) 70%, var(--deep)));color:#fff;font-family:Poppins,sans-serif;font-weight:700;letter-spacing:.06em;text-transform:uppercase;border-radius:999px;padding:calc(var(--u)*${g.cardsInRow ? 14 : 20}*var(--k)) calc(var(--u)*${g.cardsInRow ? 28 : 36});font-size:calc(var(--u)*${g.cardsInRow ? 20 : 26}*var(--k));box-shadow:0 calc(var(--u)*10) calc(var(--u)*26) color-mix(in srgb, var(--c) 35%, transparent);white-space:nowrap}
 .cta-ico{width:calc(var(--u)*28);height:calc(var(--u)*28)}
-footer{position:absolute;z-index:3;left:0;right:0;bottom:0;height:calc(var(--u)*${footerHeight});background:linear-gradient(90deg,var(--deep),color-mix(in srgb, var(--deep) 75%, var(--c)));color:#fff;display:flex;align-items:center;justify-content:space-between;gap:calc(var(--u)*24);padding:0 calc(var(--u)*64)}
-.foot-lines{display:flex;flex-wrap:wrap;gap:calc(var(--u)*10) calc(var(--u)*34);align-items:center;max-width:82%}
-.foot-line{display:flex;align-items:center;gap:calc(var(--u)*10);font-size:calc(var(--u)*22);white-space:nowrap}
-.foot-line.first{font-family:Poppins,sans-serif;font-weight:700;font-size:calc(var(--u)*24);width:100%}
-.foot-ico{width:calc(var(--u)*24);height:calc(var(--u)*24);opacity:.9}
-.fine{font-size:calc(var(--u)*16);opacity:.75;white-space:nowrap;align-self:flex-end;padding-bottom:calc(var(--u)*22)}
-</style></head><body><div class="stage ${format}">
+footer{position:absolute;z-index:3;left:0;right:0;bottom:${footerBottom}px;height:${px(footerHeight)}px;background:linear-gradient(90deg,var(--deep),color-mix(in srgb, var(--deep) 75%, var(--c)));color:#fff;display:flex;align-items:center;justify-content:space-between;gap:calc(var(--u)*24);padding:0 ${safe.right + px(g.pad)}px 0 ${safe.left + px(g.pad)}px}
+.foot-lines{display:flex;flex-wrap:${g.footerInRow ? 'nowrap' : 'wrap'};gap:calc(var(--u)*10) calc(var(--u)*34);align-items:center;max-width:82%;overflow:hidden}
+.foot-line{display:flex;align-items:center;gap:calc(var(--u)*10);font-size:calc(var(--u)*${g.footerInRow ? 19 : 22});white-space:nowrap}
+.foot-line.first{font-family:Poppins,sans-serif;font-weight:700;font-size:calc(var(--u)*${g.footerInRow ? 19 : 24});${g.footerInRow ? '' : 'width:100%'}}
+.foot-ico{width:calc(var(--u)*24);height:calc(var(--u)*24);opacity:.9;flex:none}
+.fine{font-size:calc(var(--u)*16);opacity:.75;white-space:nowrap;align-self:${g.footerInRow ? 'center' : 'flex-end'};padding-bottom:${g.footerInRow ? 0 : px(22)}px}
+</style></head><body><div class="stage ${family}" data-spec="${esc(spec.id)}">
 <div class="photo"></div>
-<div class="col">
+<div class="col${g.cardsInRow ? ' in-row' : ''}">
 ${column}
 </div>
 ${footer}
 </div>
 <script>
-// Called by the renderer once fonts are ready: shrink what does not fit.
+// Called by the renderer once fonts are ready: make everything fit.
 window.__fitDesign = function () {
   var col = document.querySelector('.col');
   var root = document.documentElement;
-  var k = 1;
+  var k = 1, dropped = [];
+  function overflowing() { return col.scrollHeight > col.clientHeight + 1; }
   function fitLines() {
     document.querySelectorAll('.fit-line').forEach(function (line) {
       line.style.fontSize = '';
@@ -289,12 +338,21 @@ window.__fitDesign = function () {
     });
   }
   fitLines();
-  while (col.scrollHeight > col.clientHeight + 1 && k > 0.6) {
+  while (overflowing() && k > 0.55) {
     k = Math.round((k - 0.04) * 100) / 100;
     root.style.setProperty('--k', k);
     fitLines();
   }
-  return { fitted: col.scrollHeight <= col.clientHeight + 1, zoom: k };
+  // Still too tall: drop the least important lines, lowest data-drop first.
+  var optional = Array.prototype.slice.call(document.querySelectorAll('[data-drop]'))
+    .sort(function (a, b) { return a.dataset.drop - b.dataset.drop; });
+  while (overflowing() && optional.length) {
+    var el = optional.shift();
+    dropped.push(el.className);
+    el.remove();
+    fitLines();
+  }
+  return { fitted: !overflowing(), zoom: k, dropped: dropped };
 };
 </script>
 </body></html>`;

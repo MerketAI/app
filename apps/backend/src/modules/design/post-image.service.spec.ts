@@ -49,8 +49,37 @@ describe('PostImageService.compose', () => {
     expect(layoutFile).toMatchObject({ mimeType: 'text/html', extension: 'html' });
     expect(layoutFiling).toMatchObject({ kind: 'template', folder: 'campaigns/eye-camp', parentId: 'gen1' });
     const [, , postFiling] = library.store.mock.calls[1];
-    expect(postFiling).toMatchObject({ kind: 'post', folder: 'campaigns/eye-camp', tags: ['eye-care'], notes: 'Nov camp', parentId: 'gen1' });
-    expect(result).toMatchObject({ url: 'http://cdn.test/post.png', libraryId: 'post1', artworkId: 'gen1', provider: 'magnific' });
+    expect(postFiling).toMatchObject({
+      kind: 'post', folder: 'campaigns/eye-camp', tags: ['eye-care', 'instagram', 'feed-portrait'], notes: 'Nov camp', parentId: 'gen1',
+      width: 1080, height: 1350, metadata: expect.objectContaining({ spec: 'instagram-feed-portrait', category: 'social', ratio: '4:5' }),
+    });
+    expect(result).toMatchObject({ url: 'http://cdn.test/post.png', libraryId: 'post1', artworkId: 'gen1', provider: 'magnific', spec: 'instagram-feed-portrait' });
+  });
+
+  it('renders several placements from one picture, skipping duplicate sizes', async () => {
+    const { service, images, renderer } = make();
+    const result = await service.compose('u1', {
+      scene: 's', headline: 'H', specs: ['instagram-feed-portrait', 'facebook-feed-portrait', 'instagram-story', 'web-hero'],
+    });
+    expect(images.generate).toHaveBeenCalledTimes(1);
+    // Facebook's 4:5 post is the same size as Instagram's, so it is not rendered twice.
+    expect(renderer.renderToImage.mock.calls.map((c: any[]) => `${c[1]}x${c[2]}`)).toEqual(['1080x1350', '1080x1920', '1920x600']);
+    expect(result.sizes.map((s) => s.spec)).toEqual(['instagram-feed-portrait', 'instagram-story', 'web-hero']);
+  });
+
+  it('accepts an exact custom size and rejects an unusable one', async () => {
+    const { service, renderer } = make();
+    await service.compose('u1', { scene: 's', headline: 'H', width: 1200, height: 1500 });
+    expect(renderer.renderToImage.mock.calls[0].slice(1, 3)).toEqual([1200, 1500]);
+    await expect(service.compose('u1', { scene: 's', headline: 'H', width: 50, height: 50 })).rejects.toThrow('between');
+  });
+
+  it('reports lines the layout had no room for', async () => {
+    const { service, renderer } = make();
+    renderer.renderToImage.mockResolvedValue({ renderer: 'puppeteer', buffer: Buffer.from('png'), fit: { fitted: true, zoom: 0.55, dropped: ['items-note'] } });
+    const result = await service.compose('u1', { scene: 's', headline: 'H', spec: 'x-header' });
+    expect(result.warnings.join(' ')).toContain('no room for the line under the cards');
+    expect(result.sizes[0].dropped).toEqual(['the line under the cards']);
   });
 
   it('reuses a library picture by id without calling the image model or charging', async () => {

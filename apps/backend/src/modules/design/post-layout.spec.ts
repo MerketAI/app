@@ -1,4 +1,5 @@
 import { buildPostLayout, pickIcon, POST_FORMATS } from './post-layout';
+import { CREATIVE_SPECS, resolveSpec } from './creative-specs';
 
 const base = { artworkUrl: 'http://img.test/a.png' };
 // Only the generated markup, not the fit script or the styles.
@@ -21,18 +22,42 @@ describe('buildPostLayout', () => {
     expect(html).toContain('<div class="price"><span class="fit-line">₹599</span></div>');
     expect(html.match(/class="card"/g)).toHaveLength(3);
     expect(html).toContain('<div class="card-label">LFT</div><div class="card-detail">Liver Function Test</div>');
-    expect(html).toContain('<div class="items-note">Contact us for the complete test list.</div>');
+    expect(html).toContain('<div class="items-note" data-drop="1">Contact us for the complete test list.</div>');
     expect(html).toContain('<div class="cta"><span>BOOK YOUR CHECKUP TODAY</span>');
     expect(html.match(/class="foot-line[ "]/g)).toHaveLength(3);
     expect(html).toContain('[Phone Number]');
   });
 
-  it('sizes the page for each format', () => {
+  it('still accepts the legacy formats', () => {
     for (const [format, size] of Object.entries(POST_FORMATS)) {
       const html = buildPostLayout({ ...base, format: format as any, headline: 'H' });
       expect(html).toContain(`width:${size.width}px;height:${size.height}px`);
-      expect(html).toContain(`class="stage ${format}"`);
     }
+  });
+
+  it('sizes the page for every creative spec and picks the layout family from its ratio', () => {
+    for (const spec of CREATIVE_SPECS) {
+      const html = buildPostLayout({ ...base, spec, headline: 'H' });
+      expect(html).toContain(`body{width:${spec.width}px;height:${spec.height}px`);
+      expect(html).toContain(`class="stage ${spec.family}" data-spec="${spec.id}"`);
+    }
+  });
+
+  it('keeps text out of a placement safe area', () => {
+    const story = resolveSpec({ spec: 'instagram-story' });
+    const html = buildPostLayout({ ...base, spec: story, headline: 'H', footerLines: ['Clinic'] });
+    // Column starts below the app's top bar; footer sits above the reply bar.
+    expect(html).toMatch(new RegExp(`\\.col\\{[^}]*top:${story.safe!.top + 90}px`));
+    expect(html).toMatch(new RegExp(`footer\\{[^}]*bottom:${story.safe!.bottom}px`));
+  });
+
+  it('marks optional lines with a drop order and ships the fit pass that uses it', () => {
+    const html = buildPostLayout({ ...base, headline: 'H', priceNote: 'n', itemsNote: 'x', items: [{ label: 'a' }], subheading: 's' });
+    expect(html).toContain('class="items-note" data-drop="1"');
+    expect(html).toContain('class="price-note" data-drop="2"');
+    expect(html).toContain('class="cards" data-drop="3"');
+    expect(html).toContain('class="sub" data-drop="4"');
+    expect(html).toContain('dropped.push');
   });
 
   it('keeps leading offers as badges', () => {

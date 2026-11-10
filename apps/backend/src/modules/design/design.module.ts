@@ -9,10 +9,11 @@ import { DesignController } from './design.controller';
 import { DesignService } from './design.service';
 import { RendererService } from './renderer.service';
 import { PostImageService } from './post-image.service';
+import { CreativeSpecsController } from './creative-specs.controller';
 
 @Module({
   imports: [PrismaModule, CredentialsModule, SubscriptionsModule, UploadModule, AssetsModule, LibraryModule],
-  controllers: [DesignController],
+  controllers: [DesignController, CreativeSpecsController],
   providers: [DesignService, RendererService, PostImageService],
   exports: [DesignService, PostImageService],
 })
