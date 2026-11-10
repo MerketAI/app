@@ -64,6 +64,12 @@ export class PlatformsService {
   // Meta (Facebook/Instagram) OAuth
   async getMetaAuthUrl(redirectUri: string, state: string) {
     const clientId = await this.credentialsService.get('META_APP_ID');
+    // Business apps use Facebook Login for Business, which asks for the permissions in a
+    // saved configuration rather than a scope list.
+    const configId = await this.credentialsService.get('META_LOGIN_CONFIG_ID');
+    if (configId) {
+      return `https://www.facebook.com/v18.0/dialog/oauth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&config_id=${encodeURIComponent(configId)}&state=${state}&response_type=code`;
+    }
     const scopes = [
       // Required for /me/accounts: without it the provider's Pages never list.
       'pages_show_list',
