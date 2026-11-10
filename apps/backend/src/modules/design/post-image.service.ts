@@ -58,6 +58,16 @@ export interface RenderedSize {
   dropped: string[];
   /** How this size was made. */
   mode: 'layout' | 'designer';
+  /**
+   * What was actually made, for the assistant to describe - not what was planned.
+   * text: the words on the image (designer: as the proofreader read them).
+   */
+  made: {
+    text: string;
+    picture: string;
+    pictureSource: 'new' | 'library';
+    logo: 'placed' | 'space reserved' | 'none';
+  };
 }
 
 export interface PostImageResult {
@@ -204,17 +214,21 @@ export class PostImageService {
     if (input.mode === 'designer' && !designerOn) {
       warnings.push('Designer mode needs OPENAI_API_KEY and ANTHROPIC_API_KEY; used the standard layout instead.');
     }
-    let designerInputs: { logo?: Buffer; references?: Buffer[]; picture?: string } | null = null;
+    let designerInputs: { logo?: Buffer; references?: Buffer[]; picture?: string; photo?: Buffer; photoScene?: string } | null = null;
     if (designerOn) {
       const logoUrl = input.logoUrl || profile?.logoUrl || undefined;
-      const [logo, references] = await Promise.all([
+      // A library picture being reused becomes the photograph the design is built around.
+      const reused = input.artworkId ? await this.library.get(userId, input.artworkId) : null;
+      if (reused && !['image', 'gif'].includes(reused.mediaType)) throw new BadRequestException('That library asset is not a picture.');
+      const [logo, references, photo] = await Promise.all([
         logoUrl && input.logo !== 'none' ? fetchInputImage(logoUrl).catch((e) => { warnings.push(`The logo could not be used: ${e.message}`); return undefined; }) : undefined,
         Promise.all((input.referenceUrls || []).slice(0, 3).map((u) => fetchInputImage(u).catch(() => null))).then((list) => list.filter(Boolean) as Buffer[]),
+        reused ? fetchInputImage(reused.url).catch((e) => { warnings.push(`The library picture could not be used (${e.message}); a new one was drawn.`); return undefined; }) : undefined,
       ]);
       const picture = direction
         ? composeArtPrompt({ ...direction, subject: this.imageGeneration.sanitiseSubject(direction.subject).subject }, theme)
         : undefined;
-      designerInputs = { logo, references, picture };
+      designerInputs = { logo, references, picture, photo, photoScene: photo ? reused?.scene || undefined : undefined };
     }
 
     const sizes: RenderedSize[] = [];
@@ -230,6 +244,8 @@ export class PostImageService {
             businessName: profile?.businessName || undefined,
             brandColour: colour,
             logo: designerInputs.logo,
+            reserveLogo: !designerInputs.logo && input.logo === 'reserve',
+            photo: designerInputs.photo,
             references: designerInputs.references,
           });
           await this.subscriptions.consumeCredits(userId, 'DESIGN_GENERATE');
@@ -255,7 +271,16 @@ export class PostImageService {
             },
           );
           if (designed.attempts > 1) warnings.push(`At ${spec.label} the first design had a text error and was redone; the final one was checked word for word.`);
-          sizes.push({ spec: spec.id, label: spec.label, url: post.url, libraryId: post.id, width: spec.width, height: spec.height, ratio: spec.ratio, dropped: [], mode: 'designer' });
+          sizes.push({
+            spec: spec.id, label: spec.label, url: post.url, libraryId: post.id, width: spec.width, height: spec.height, ratio: spec.ratio,
+            dropped: [], mode: 'designer',
+            made: {
+              text: designed.verification.transcript,
+              picture: designed.verification.imagery,
+              pictureSource: designerInputs.photo ? 'library' : 'new',
+              logo: designerInputs.logo ? 'placed' : !designerInputs.logo && input.logo === 'reserve' ? 'space reserved' : 'none',
+            },
+          });
           continue;
         } catch (error) {
           this.logger.warn(`Designer failed at ${spec.id}: ${(error as Error).message}`);
@@ -328,6 +353,18 @@ export class PostImageService {
         ratio: spec.ratio,
         dropped,
         mode: 'layout',
+        made: {
+          // The layout places the copy exactly as given, minus anything the fit pass dropped.
+          text: copyText(input) + (dropped.length ? ` (left out at this size: ${dropped.join(', ')})` : ''),
+          picture: artwork.scene,
+          pictureSource: input.artworkId ? 'library' : 'new',
+          logo:
+            (input.logoUrl || profile?.logoUrl) && input.logo !== 'none' && input.logo !== 'reserve'
+              ? 'placed'
+              : input.logo === 'reserve'
+                ? 'space reserved'
+                : 'none',
+        },
       });
     }
     // Assigned inside getArtwork, which TypeScript's narrowing cannot see.

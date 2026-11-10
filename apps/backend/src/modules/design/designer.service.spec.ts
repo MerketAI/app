@@ -55,6 +55,25 @@ describe('designer prompt', () => {
   });
 });
 
+describe('designer prompt: photo and logo space', () => {
+  const spec = resolveSpec({ spec: 'instagram-feed-portrait' });
+  const size = { width: 1088, height: 1360 };
+
+  it('builds around a supplied photo, numbered after the logo', () => {
+    const withLogo = composeDesignerPrompt({ spec, copy, theme: THEMES['clinical-clean'], logo: Buffer.from('l'), photo: Buffer.from('p') }, size);
+    expect(withLogo).toContain('the second provided image is the photograph to use as the main imagery');
+    expect(withLogo).not.toContain('Imagery:');
+    const alone = composeDesignerPrompt({ spec, copy, theme: THEMES['clinical-clean'], photo: Buffer.from('p'), picture: 'ignored' }, size);
+    expect(alone).toContain('the first provided image is the photograph');
+  });
+
+  it('keeps an empty corner when logo space is reserved, and never writes a placeholder', () => {
+    const prompt = composeDesignerPrompt({ spec, copy, theme: THEMES['clinical-clean'], reserveLogo: true }, size);
+    expect(prompt).toContain('LOGO SPACE: leave the top-left corner');
+    expect(prompt).toContain('do not write any placeholder text there or anywhere');
+  });
+});
+
 describe('fetchInputImage', () => {
   it.each(['http://cdn.test/logo.png', 'https://localhost/logo.png', 'https://127.0.0.1/logo.png', 'https://10.0.0.5/x.png', 'https://[::1]/x.png', 'https://box.internal/x.png', 'not a url'])(
     'refuses %s',
@@ -76,7 +95,7 @@ describe('DesignerService.design', () => {
   it('returns the first design that passes verification, at the exact delivery size', async () => {
     const { service } = make();
     const generate = jest.spyOn(service as any, 'generate').mockImplementation(png);
-    jest.spyOn(service, 'verify').mockResolvedValue({ ok: true, transcript: 'ok', problems: [] });
+    jest.spyOn(service, 'verify').mockResolvedValue({ ok: true, transcript: 'ok', imagery: 'a doctor', problems: [] });
     const result = await service.design(input());
     expect(generate).toHaveBeenCalledTimes(1);
     expect(generate.mock.calls[0][0]).toBe('gpt-image-2.6-flare');
@@ -87,7 +106,7 @@ describe('DesignerService.design', () => {
   it('retries once with the problems spelled out, then gives up', async () => {
     const { service } = make();
     const generate = jest.spyOn(service as any, 'generate').mockImplementation(png);
-    jest.spyOn(service, 'verify').mockResolvedValue({ ok: false, transcript: '₹559', problems: ['price reads ₹559'] });
+    jest.spyOn(service, 'verify').mockResolvedValue({ ok: false, transcript: '₹559', imagery: 'a doctor', problems: ['price reads ₹559'] });
     await expect(service.design(input())).rejects.toThrow('price reads ₹559');
     expect(generate).toHaveBeenCalledTimes(2);
     expect(generate.mock.calls[1][1]).toContain('The previous attempt had these errors, which must be fixed: price reads ₹559');
@@ -97,8 +116,8 @@ describe('DesignerService.design', () => {
     const { service } = make();
     jest.spyOn(service as any, 'generate').mockImplementation(png);
     jest.spyOn(service, 'verify')
-      .mockResolvedValueOnce({ ok: false, transcript: '', problems: ['missing BOOK NOW'] })
-      .mockResolvedValueOnce({ ok: true, transcript: 'ok', problems: [] });
+      .mockResolvedValueOnce({ ok: false, transcript: '', imagery: 'a doctor', problems: ['missing BOOK NOW'] })
+      .mockResolvedValueOnce({ ok: true, transcript: 'ok', imagery: 'a doctor', problems: [] });
     const result = await service.design(input());
     expect(result.attempts).toBe(2);
   });

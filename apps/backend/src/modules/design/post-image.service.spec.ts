@@ -33,7 +33,7 @@ describe('PostImageService.compose', () => {
       subs: { consumeCredits: jest.fn().mockResolvedValue({}) },
       designer: {
         isAvailable: jest.fn().mockResolvedValue(true),
-        design: jest.fn().mockResolvedValue({ buffer: Buffer.from('designed'), model: 'gpt-image-2.6-flare', attempts: 1, verification: { ok: true, transcript: 'FREE', problems: [] } }),
+        design: jest.fn().mockResolvedValue({ buffer: Buffer.from('designed'), model: 'gpt-image-2.6-flare', attempts: 1, verification: { ok: true, transcript: 'FREE', imagery: 'a doctor at a desk', problems: [] } }),
       },
     };
     const service = new PostImageService(deps.prisma as any, deps.images as any, deps.renderer as any, deps.library as any, deps.subs as any, deps.designer as any);
@@ -51,6 +51,19 @@ describe('PostImageService.compose', () => {
       expect(subs.consumeCredits).toHaveBeenCalledWith('u1', 'DESIGN_GENERATE');
       expect(library.store.mock.calls[0][2]).toMatchObject({ kind: 'post', source: 'gpt-image-2.6-flare', tags: expect.arrayContaining(['designer']) });
       expect(result.sizes.map((s) => s.mode)).toEqual(['designer', 'designer']);
+      // What was made comes from the proofreader, not from the plan.
+      expect(result.sizes[0].made).toEqual({ text: 'FREE', picture: 'a doctor at a desk', pictureSource: 'new', logo: 'none' });
+    });
+
+    it('builds the design around a reused library picture, and reports it', async () => {
+      const { service, designer, library } = make();
+      library.get.mockResolvedValue({ id: 'art1', mediaType: 'image', url: 'https://cdn.test/art1.png', scene: 'a doctor' });
+      const fetchSpy = jest.spyOn(require('./designer.service'), 'fetchInputImage').mockResolvedValue(Buffer.from('photo'));
+      const result = await service.compose('u1', { mode: 'designer', headline: 'H', artworkId: 'art1', logo: 'reserve' });
+      expect(fetchSpy).toHaveBeenCalledWith('https://cdn.test/art1.png');
+      expect(designer.design.mock.calls[0][0]).toMatchObject({ photo: Buffer.from('photo'), reserveLogo: true });
+      expect(result.sizes[0].made).toMatchObject({ pictureSource: 'library', logo: 'space reserved' });
+      fetchSpy.mockRestore();
     });
 
     it('falls back to the exact-text layout for a size that fails verification, and says why', async () => {

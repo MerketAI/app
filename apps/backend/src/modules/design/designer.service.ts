@@ -26,6 +26,10 @@ export interface DesignerInput {
   brandColour?: string;
   /** The provider's logo, placed exactly as supplied. */
   logo?: Buffer;
+  /** Keep an empty corner for a logo to be added later (when there is no logo). */
+  reserveLogo?: boolean;
+  /** A photograph to build the design around (e.g. a library picture being reused). */
+  photo?: Buffer;
   /** Style/mood references: never copied, only followed. */
   references?: Buffer[];
 }
@@ -34,8 +38,13 @@ export interface Verification {
   ok: boolean;
   /** Everything Claude could read in the image. */
   transcript: string;
+  /** One sentence on what the picture shows, as seen - not as briefed. */
+  imagery: string;
   problems: string[];
 }
+
+/** Where the logo space goes: top-left, clear of any app overlay. */
+const LOGO_SPACE = 'the top-left corner (about 28% of the width and 12% of the height)';
 
 export interface DesignerResult {
   buffer: Buffer;
@@ -90,14 +99,20 @@ export function composeDesignerPrompt(input: DesignerInput, size: { width: numbe
     input.logo || input.references?.length
       ? `Colours: take the brand colours from the provided ${input.logo ? 'logo' : 'reference'}${input.brandColour ? ` (otherwise build around ${input.brandColour})` : ''}.`
       : `Colours: built around the brand colour ${input.brandColour || '#0f766e'}, with ${theme.image.palette}.`,
-    input.picture ? `Imagery: ${input.picture}` : '',
+    input.photo
+      ? `PHOTO: the ${input.logo ? 'second' : 'first'} provided image is the photograph to use as the main imagery. Keep its subject, people and look; you may crop it, extend its background and adjust its colours to fit the layout, but do not redraw or replace the people in it.`
+      : input.picture
+        ? `Imagery: ${input.picture}`
+        : '',
     'TEXT. Render exactly these lines, spelled character for character as written, each once, in this order of importance. Do not add, change, translate, abbreviate or invent any other words, numbers, prices, phone numbers, web addresses, hashtags, QR codes, badges, ratings or certifications:',
     ...lines.map((l, i) => `${i + 1}. [${l.role}] "${l.text}"`),
     input.logo
       ? 'LOGO: the first provided image is the logo. Place it exactly as supplied - same shapes, colours and lettering, unaltered and undistorted - near the top, clearly visible. Do not redraw it and do not add any other logo.'
-      : 'LOGO: there is no logo. Do not draw one and do not write any placeholder such as "logo", "your logo here" or "clinic name".',
+      : input.reserveLogo
+        ? `LOGO SPACE: leave ${LOGO_SPACE} completely empty - plain background only, no text, shapes, people or objects - so a logo can be added later. Do not draw a logo and do not write any placeholder text there or anywhere.`
+        : 'LOGO: there is no logo. Do not draw one and do not write any placeholder such as "logo", "your logo here" or "clinic name".',
     input.references?.length
-      ? `REFERENCE: the ${input.logo ? 'other provided image(s) are' : 'provided image(s) are'} style references only - follow their mood, colours and layout ideas, but never copy their text, people, faces or logos.`
+      ? `REFERENCE: the last ${input.references.length > 1 ? `${input.references.length} provided images are` : 'provided image is'} style ${input.references.length > 1 ? 'references' : 'reference'} only - follow the mood, colours and layout ideas, but never copy their text, people, faces or logos.`
       : '',
     `Keep all text at least 4% inside the edges${safe ? `, and clear of the areas the app covers: ${safe.top}px top, ${safe.bottom}px bottom, ${safe.left}px left, ${safe.right}px right (at ${spec.width}×${spec.height})` : ''}.`,
     'Any people are generic, non-identifiable and of South Asian appearance. Avoid needles in skin, blood, wounds and distressing medical imagery.',
@@ -175,7 +190,8 @@ export class DesignerService {
   private async generate(model: string, prompt: string, size: { width: number; height: number }, input: DesignerInput): Promise<Buffer> {
     const apiKey = await this.credentials.get('OPENAI_API_KEY');
     const base = ((await this.credentials.get('OPENAI_BASE_URL')) || 'https://api.openai.com/v1').replace(/\/+$/, '');
-    const images = [...(input.logo ? [input.logo] : []), ...(input.references || []).slice(0, 3)];
+    // Order matters: the prompt refers to them as logo, then photo, then references.
+    const images = [...(input.logo ? [input.logo] : []), ...(input.photo ? [input.photo] : []), ...(input.references || []).slice(0, 3)];
     let response: Response;
     if (images.length) {
       // Edits accept several input images: the logo first, then references.
@@ -230,8 +246,12 @@ export class DesignerService {
                 ...lines.map((l, i) => `${i + 1}. "${l.text}"`),
                 `Also allowed: the business name${input.businessName ? ` "${input.businessName}"` : ''} and the lettering inside a logo${input.logo ? ' (a logo was supplied)' : ''}.`,
                 'Report as problems: any required text that is missing, misspelt, cut off or unreadable; any number, price, phone number, date or percentage that differs; and any other words or numbers in the image that are not in the list above (for example invented offers, phone numbers, web addresses, "logo here" placeholders, badges or certifications). Ignore purely decorative marks.',
-                'Reply with JSON only: {"transcript": "<all text you can read>", "problems": ["<short description>", ...]}',
-              ].join('\n'),
+                input.reserveLogo && !input.logo
+                  ? `Also check that ${LOGO_SPACE} is empty (plain background, nothing placed there); if anything is in it, report "the logo space is not empty".`
+                  : '',
+                'Also describe in one plain sentence what the picture shows (people, setting, main objects), as you see it.',
+                'Reply with JSON only: {"transcript": "<all text you can read>", "imagery": "<one sentence>", "problems": ["<short description>", ...]}',
+              ].filter(Boolean).join('\n'),
             },
           ],
         },
@@ -241,9 +261,9 @@ export class DesignerService {
     try {
       const json = JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1));
       const problems = Array.isArray(json.problems) ? json.problems.map(String).filter(Boolean) : ['the proofreader returned no problem list'];
-      return { ok: problems.length === 0, transcript: String(json.transcript || ''), problems };
+      return { ok: problems.length === 0, transcript: String(json.transcript || ''), imagery: String(json.imagery || ''), problems };
     } catch {
-      return { ok: false, transcript: text.slice(0, 500), problems: ['the proofreader reply could not be read'] };
+      return { ok: false, transcript: text.slice(0, 500), imagery: '', problems: ['the proofreader reply could not be read'] };
     }
   }
 }
