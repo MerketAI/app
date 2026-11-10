@@ -23,7 +23,16 @@ async function bootstrap() {
         res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
         next();
       },
-      express.static(LOCAL_UPLOAD_DIR, { fallthrough: false, index: false }),
+      express.static(LOCAL_UPLOAD_DIR, {
+        fallthrough: false,
+        index: false,
+        // Same rule as object storage: never run stored HTML/SVG/JS when opened directly.
+        setHeaders: (res, filePath) => {
+          if (/\.(html?|xhtml|svg|xml|js|mjs)$/i.test(filePath)) {
+            res.setHeader('Content-Disposition', 'attachment');
+          }
+        },
+      }),
     );
   }
 

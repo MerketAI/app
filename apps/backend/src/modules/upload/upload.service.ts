@@ -29,6 +29,17 @@ export const LOCAL_UPLOAD_ROUTE = '/local-uploads';
 export const localUploadsEnabled = () =>
   process.env.LOCAL_UPLOADS === 'true' && process.env.NODE_ENV !== 'production';
 
+/**
+ * Types a browser would run if opened directly. Storage is served from a
+ * subdomain of the product's own domain, where a script could read cookies
+ * scoped to the parent, so these are stored as downloads ("attachment"). An
+ * SVG still renders inside <img>; only direct navigation is affected.
+ */
+export const isActiveContent = (contentType = '') =>
+  /^(text\/html|application\/xhtml\+xml|image\/svg\+xml|text\/xml|application\/xml|(text|application)\/(x-)?javascript)\b/i.test(
+    contentType.trim(),
+  );
+
 const IMAGE_MIME_TYPES = [
   'image/jpeg',
   'image/png',
@@ -161,6 +172,7 @@ export class UploadService {
         Key: key,
         Body: body,
         ContentType: contentType,
+        ...(isActiveContent(contentType) ? { ContentDisposition: 'attachment' } : {}),
         // Cache generated assets aggressively; keys are content-unique.
         CacheControl: 'public, max-age=31536000, immutable',
         // R2 rejects ACLs outright, so only send one on S3.
