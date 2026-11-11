@@ -265,6 +265,55 @@ export interface AgentReply {
   drafts: Array<Record<string, unknown>>;
 }
 
+const DRAFT_TOOLS = new Set(['save_post_draft', 'update_post_draft']);
+
+/**
+ * The messages a person saw, each assistant reply carrying the ids of the drafts its
+ * turn saved or revised. A turn runs from one thing the person typed to the next; its
+ * drafts belong to the last reply in it, which is where the cards were shown.
+ */
+export function conversationView(stored: Array<{ role: string; content: string }>) {
+  const out: Array<{ role: string; text: string; draftIds: string[] }> = [];
+  const toolNames = new Map<string, string>();
+  let pending: string[] = [];
+  let lastReply: { draftIds: string[] } | undefined;
+
+  const flush = () => {
+    if (lastReply && pending.length) lastReply.draftIds = [...new Set([...lastReply.draftIds, ...pending])];
+    pending = [];
+  };
+
+  for (const m of stored) {
+    let blocks: any[];
+    try { blocks = JSON.parse(m.content); } catch { continue; }
+    if (!Array.isArray(blocks)) blocks = [{ type: 'text', text: String(blocks) }];
+
+    for (const b of blocks) {
+      if (b.type === 'tool_use') toolNames.set(b.id, b.name);
+      if (b.type === 'tool_result' && !b.is_error && DRAFT_TOOLS.has(toolNames.get(b.tool_use_id) || '')) {
+        try {
+          const result = JSON.parse(typeof b.content === 'string' ? b.content : b.content?.[0]?.text || '');
+          if (result && result.draftId) pending.push(result.draftId);
+        } catch { /* not JSON: no draft */ }
+      }
+    }
+
+    const text = blocks.filter((b) => b.type === 'text').map((b) => b.text).join('\n').trim();
+    if (!text) continue;
+    if (m.role === 'user') {
+      flush();
+      lastReply = undefined;
+      out.push({ role: m.role, text, draftIds: [] });
+    } else {
+      const entry = { role: m.role, text, draftIds: [] as string[] };
+      out.push(entry);
+      lastReply = entry;
+    }
+  }
+  flush();
+  return out;
+}
+
 @Injectable()
 export class AgentService {
   private readonly logger = new Logger(AgentService.name);
@@ -637,7 +686,11 @@ export class AgentService {
     });
   }
 
-  /** Just what a person said and read: tool calls, results and reasoning are left out. */
+  /**
+   * What a person said and read, with the drafts each reply made, so a reopened chat
+   * shows its post cards again. Tool calls, results and reasoning are left out; drafts
+   * are read as they are now (edited, scheduled or published since).
+   */
   async getConversation(userId: string, id: string) {
     const conversation = await this.prisma.agentConversation.findFirst({
       where: { id, userId },
@@ -645,16 +698,26 @@ export class AgentService {
     });
     if (!conversation) throw new NotFoundException('Conversation not found');
 
-    const messages = conversation.messages
-      .map((m) => ({
-        role: m.role,
-        text: (JSON.parse(m.content) as any[])
-          .filter((b) => b.type === 'text')
-          .map((b) => b.text)
-          .join('\n')
-          .trim(),
-      }))
-      .filter((m) => m.text);
+    const visible = conversationView(conversation.messages);
+    const ids = [...new Set(visible.flatMap((m) => m.draftIds))];
+    const rows = ids.length
+      ? await this.prisma.content.findMany({ where: { id: { in: ids }, userId } })
+      : [];
+    const byId = new Map(rows.map((row) => [row.id, {
+      id: row.id,
+      platform: this.draftPlatform(row.aiMetadata),
+      title: row.title,
+      caption: row.caption,
+      body: row.body || '',
+      hashtags: this.parseList(row.hashtags),
+      mediaUrls: this.parseList(row.mediaUrls),
+      status: row.status,
+    }]));
+
+    const messages = visible.map(({ role, text, draftIds }) => {
+      const drafts = draftIds.map((d) => byId.get(d)).filter(Boolean);
+      return drafts.length ? { role, text, drafts } : { role, text };
+    });
     return { id: conversation.id, title: conversation.title, messages };
   }
 }

@@ -212,3 +212,42 @@ describe('AgentService', () => {
     expect(JSON.parse(stored[1].content)).toEqual([thinking, text('Hi')]);
   });
 });
+
+describe('conversationView', () => {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { conversationView } = require('./agent.service');
+  const msg = (role: string, ...blocks: unknown[]) => ({ role, content: JSON.stringify(blocks) });
+  const result = (id: string, out: unknown, is_error = false) => ({ type: 'tool_result', tool_use_id: id, content: JSON.stringify(out), is_error });
+
+  it('gives each turn’s drafts to its last reply, and hides tool traffic', () => {
+    const view = conversationView([
+      msg('user', text('Make an eye camp post')),
+      msg('assistant', text('Designing it now.'), toolUse('t1', 'create_post_image')),
+      msg('user', result('t1', { url: 'x' })),
+      msg('assistant', toolUse('t2', 'save_post_draft')),
+      msg('user', result('t2', { saved: true, draftId: 'd1' })),
+      msg('assistant', text('Here is your post.')),
+      msg('user', text('Make it shorter')),
+      msg('assistant', toolUse('t3', 'update_post_draft')),
+      msg('user', result('t3', { updated: true, draftId: 'd1' })),
+      msg('assistant', text('Shortened.')),
+    ]);
+    expect(view.map((m: any) => [m.role, m.text, m.draftIds])).toEqual([
+      ['user', 'Make an eye camp post', []],
+      ['assistant', 'Designing it now.', []],
+      ['assistant', 'Here is your post.', ['d1']],
+      ['user', 'Make it shorter', []],
+      ['assistant', 'Shortened.', ['d1']],
+    ]);
+  });
+
+  it('ignores failed draft calls and other tools', () => {
+    const view = conversationView([
+      msg('user', text('Post please')),
+      msg('assistant', toolUse('t1', 'save_post_draft'), toolUse('t2', 'get_draft')),
+      msg('user', { type: 'tool_result', tool_use_id: 't1', is_error: true, content: 'Instagram posts need an image.' }, result('t2', { draftId: 'old' })),
+      msg('assistant', text('I need an image first.')),
+    ]);
+    expect(view[1].draftIds).toEqual([]);
+  });
+});
