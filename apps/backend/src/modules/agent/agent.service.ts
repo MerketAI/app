@@ -251,8 +251,11 @@ const TOOLS: any[] = [
     },
   },
   // Live trends, diseases and local news. Anthropic runs this server-side.
+  // The plain version on purpose: web_search_20260209 filters results with code the
+  // model writes, and that code crashed on the result format (results arrived as
+  // strings), so the assistant told providers search was down when it wasn't.
   {
-    type: 'web_search_20260209',
+    type: 'web_search_20250305',
     name: 'web_search',
     max_uses: 5,
     user_location: { type: 'approximate', country: 'IN', timezone: 'Asia/Kolkata' },
