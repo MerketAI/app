@@ -10,6 +10,7 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  Logger,
   Res,
 } from '@nestjs/common';
 import { Response } from 'express';
@@ -21,7 +22,7 @@ import {
 } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import { DriveService } from './drive.service';
-import { PlatformsService } from './platforms.service';
+import { MetaConnectError, PlatformsService } from './platforms.service';
 import { HybridAuthGuard } from '../partner/guards/hybrid-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import {
@@ -33,6 +34,8 @@ import {
 @ApiTags('platforms')
 @Controller({ path: 'platforms', version: '1' })
 export class PlatformsController {
+  private readonly logger = new Logger(PlatformsController.name);
+
   constructor(
     private platformsService: PlatformsService,
     private driveService: DriveService,
@@ -87,7 +90,11 @@ export class PlatformsController {
       await this.platformsService.handleMetaCallback(userId, code, redirectUri);
       res.redirect(this.afterOAuth(returnUrl, 'success=meta'));
     } catch (error) {
-      res.redirect(this.afterOAuth(returnUrl, 'error=meta'));
+      // The page shows a specific message for a known reason ("no-pages": login
+      // worked but no Page was shared) and a generic one otherwise.
+      const reason = error instanceof MetaConnectError ? error.reason : 'unknown';
+      if (reason === 'unknown') this.logger.error(`Meta connect for ${userId} failed`, error as Error);
+      res.redirect(this.afterOAuth(returnUrl, `error=meta&reason=${reason}`));
     }
   }
 
