@@ -1,5 +1,6 @@
 import {
   Injectable,
+  Logger,
   NotFoundException,
   BadRequestException,
   ForbiddenException,
@@ -16,6 +17,20 @@ interface OAuthTokenResponse {
   token_type: string;
 }
 
+/**
+ * Why a Meta connection saved nothing. The callback turns `reason` into the
+ * `reason=` it hands back to the caller's page, so the provider is told what to fix
+ * instead of seeing "connected" with no account listed.
+ */
+export class MetaConnectError extends Error {
+  constructor(
+    readonly reason: 'facebook' | 'no-pages',
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
 interface MetaAccountInfo {
   id: string;
   name: string;
@@ -24,6 +39,8 @@ interface MetaAccountInfo {
 
 @Injectable()
 export class PlatformsService {
+  private readonly logger = new Logger(PlatformsService.name);
+
   constructor(
     private prisma: PrismaService,
     private credentialsService: CredentialsService,
@@ -91,10 +108,12 @@ export class PlatformsService {
     const tokenUrl = `https://graph.facebook.com/v18.0/oauth/access_token?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&client_secret=${clientSecret}&code=${code}`;
 
     const tokenResponse = await fetch(tokenUrl);
-    const tokenData: OAuthTokenResponse = await tokenResponse.json();
+    const tokenData: OAuthTokenResponse & { error?: { message?: string } } = await tokenResponse.json();
 
     if (!tokenData.access_token) {
-      throw new BadRequestException('Failed to obtain access token');
+      const why = tokenData.error?.message || `HTTP ${tokenResponse.status}`;
+      this.logger.warn(`Meta connect for ${userId}: no access token (${why})`);
+      throw new MetaConnectError('facebook', `Failed to obtain access token: ${why}`);
     }
 
     // Get long-lived token
@@ -110,6 +129,19 @@ export class PlatformsService {
     const pagesUrl = `https://graph.facebook.com/v18.0/me/accounts?access_token=${accessToken}`;
     const pagesResponse = await fetch(pagesUrl);
     const pagesData = await pagesResponse.json();
+
+    if (pagesData.error) {
+      const why = pagesData.error.message || `HTTP ${pagesResponse.status}`;
+      this.logger.warn(`Meta connect for ${userId}: listing Pages failed (${why})`);
+      throw new MetaConnectError('facebook', `Listing Pages failed: ${why}`);
+    }
+    if (!pagesData.data?.length) {
+      // Login worked but no Page came back: the account manages none, none was
+      // chosen in the dialog, or Page permissions weren't granted. Record which.
+      const granted = await this.grantedMetaPermissions(accessToken);
+      this.logger.warn(`Meta connect for ${userId}: no Pages shared; granted permissions: ${granted}`);
+      throw new MetaConnectError('no-pages', `No Facebook Pages were shared (granted: ${granted})`);
+    }
 
     const connections = [];
 
@@ -185,6 +217,20 @@ export class PlatformsService {
     }
 
     return { connections };
+  }
+
+  /** The permissions a Meta user token actually holds, for diagnosing an empty connect. */
+  private async grantedMetaPermissions(accessToken: string): Promise<string> {
+    try {
+      const res = await fetch(`https://graph.facebook.com/v18.0/me/permissions?access_token=${accessToken}`);
+      const body = await res.json();
+      const granted = (body.data || [])
+        .filter((p: { status: string }) => p.status === 'granted')
+        .map((p: { permission: string }) => p.permission);
+      return granted.length ? granted.join(', ') : 'none';
+    } catch {
+      return 'unknown';
+    }
   }
 
   // Google OAuth (for Google Ads and GMB)
