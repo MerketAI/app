@@ -20,12 +20,12 @@ import {
 } from '@nestjs/swagger';
 import { PostsService } from './posts.service';
 import { CreatePostDto, UpdatePostDto, SyncWordPressDto } from './dto';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { HybridAuthGuard } from '../partner/guards/hybrid-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
 @ApiTags('workspace/posts')
 @Controller({ path: 'workspace/posts', version: '1' })
-@UseGuards(JwtAuthGuard)
+@UseGuards(HybridAuthGuard)
 @ApiBearerAuth()
 export class PostsController {
   constructor(private postsService: PostsService) {}

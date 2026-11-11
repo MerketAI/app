@@ -1,0 +1,10 @@
+# Never upload local secrets, builds or databases with `railway up`.
+.env
+.env.*
+!.env.example
+node_modules/
+dist/
+*.db
+*.db-journal
+uploads/
+coverage/

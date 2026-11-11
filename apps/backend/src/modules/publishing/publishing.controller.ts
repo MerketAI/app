@@ -16,12 +16,12 @@ import {
   ApiBearerAuth,
 } from '@nestjs/swagger';
 import { PublishingService } from './publishing.service';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { HybridAuthGuard } from '../partner/guards/hybrid-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
 @ApiTags('publishing')
 @Controller({ path: 'publishing', version: '1' })
-@UseGuards(JwtAuthGuard)
+@UseGuards(HybridAuthGuard)
 @ApiBearerAuth()
 export class PublishingController {
   constructor(private publishingService: PublishingService) {}
@@ -45,12 +45,5 @@ export class PublishingController {
     @Query('offset') offset?: number,
   ) {
     return this.publishingService.getPublishingHistory(userId, limit, offset);
-  }
-
-  @Post('process-scheduled')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Process scheduled content (internal/cron)' })
-  async processScheduled() {
-    return this.publishingService.processScheduledContent();
   }
 }

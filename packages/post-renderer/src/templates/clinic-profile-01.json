@@ -1,0 +1,351 @@
+{
+  "schemaVersion": "1.0.0",
+  "id": "clinic-profile-01",
+  "templateVersion": "1.0.0",
+  "title": "Practice profile",
+  "family": "medical-editorial",
+  "status": "active",
+  "description": "Dense practice profile: headline, photo, service grid, consulting hours, trust badges and a contact bar. Suits a clinic that wants one asset answering what they do, when they are open and how to reach them.",
+  "campaignTypes": ["clinic_profile", "services", "awareness"],
+  "formats": ["a4_portrait"],
+  "referenceFormat": "a4_portrait",
+  "theme": { "mood": "clinical", "background": "surface" },
+  "capabilities": {
+    "maxServices": 8,
+    "supportsCutout": false,
+    "supportsPhoto": true,
+    "supportsTimings": true,
+    "supportsBadges": true
+  },
+  "slots": {
+    "brandName": {
+      "kind": "text",
+      "source": "profile",
+      "profileField": "clinicName",
+      "required": true,
+      "maxChars": 48,
+      "maxLines": 1,
+      "minFontSize": 24,
+      "maxFontSize": 44,
+      "overflow": "shrink",
+      "description": "Practice or practitioner name, top left."
+    },
+    "headline": {
+      "kind": "richtext",
+      "source": "campaign",
+      "required": true,
+      "maxChars": 80,
+      "maxLines": 3,
+      "minFontSize": 42,
+      "maxFontSize": 82,
+      "overflow": "shrink",
+      "description": "Main message. Emphasise the closing phrase."
+    },
+    "subheadline": {
+      "kind": "text",
+      "source": "campaign",
+      "required": false,
+      "maxChars": 120,
+      "maxLines": 2,
+      "minFontSize": 22,
+      "maxFontSize": 32,
+      "overflow": "shrink",
+      "fallback": "hide"
+    },
+    "heroImage": {
+      "kind": "image",
+      "source": "asset",
+      "required": false,
+      "overflow": "hide",
+      "fallback": "hide"
+    },
+    "servicesTitle": {
+      "kind": "text",
+      "source": "campaign",
+      "required": false,
+      "maxChars": 28,
+      "maxLines": 1,
+      "overflow": "truncate",
+      "fallback": "placeholder",
+      "placeholder": "Our services"
+    },
+    "services": {
+      "kind": "list",
+      "source": "campaign",
+      "required": true,
+      "maxItems": 8,
+      "maxItemChars": 44,
+      "minFontSize": 20,
+      "maxFontSize": 32,
+      "overflow": "shrink",
+      "description": "Short service names. Two or three words read best."
+    },
+    "timings": {
+      "kind": "keyvalue",
+      "source": "campaign",
+      "required": false,
+      "maxItems": 4,
+      "overflow": "hide",
+      "fallback": "hide"
+    },
+    "badges": {
+      "kind": "list",
+      "source": "campaign",
+      "required": false,
+      "maxItems": 4,
+      "maxItemChars": 24,
+      "overflow": "hide",
+      "fallback": "hide",
+      "description": "Trust markers, rendered as centred cards."
+    },
+    "cta": {
+      "kind": "text",
+      "source": "campaign",
+      "required": false,
+      "maxChars": 40,
+      "maxLines": 1,
+      "minFontSize": 24,
+      "maxFontSize": 40,
+      "overflow": "shrink",
+      "fallback": "hide"
+    },
+    "address": {
+      "kind": "text",
+      "source": "profile",
+      "profileField": "address",
+      "required": false,
+      "maxChars": 160,
+      "maxLines": 3,
+      "overflow": "wrap",
+      "fallback": "hide"
+    },
+    "phone": {
+      "kind": "text",
+      "source": "profile",
+      "profileField": "phone",
+      "required": false,
+      "maxChars": 24,
+      "maxLines": 1,
+      "overflow": "truncate",
+      "fallback": "hide"
+    },
+    "email": {
+      "kind": "text",
+      "source": "profile",
+      "profileField": "email",
+      "required": false,
+      "maxChars": 48,
+      "maxLines": 1,
+      "overflow": "truncate",
+      "fallback": "hide"
+    },
+    "website": {
+      "kind": "text",
+      "source": "profile",
+      "profileField": "website",
+      "required": false,
+      "maxChars": 48,
+      "maxLines": 1,
+      "overflow": "truncate",
+      "fallback": "hide"
+    }
+  },
+  "zones": [
+    {
+      "id": "wash",
+      "layer": 0,
+      "frame": { "x": 0, "y": 0, "width": 1240, "height": 760 },
+      "children": [
+        { "component": "Shape", "shape": "wash", "style": { "color": "accent" } }
+      ]
+    },
+    {
+      "id": "brand",
+      "layer": 2,
+      "frame": { "x": 74, "y": 52, "width": 740, "height": 90 },
+      "children": [
+        {
+          "component": "Text",
+          "slot": "brandName",
+          "style": {
+            "fontFamily": "display",
+            "fontSize": 44,
+            "fontWeight": 800,
+            "textTransform": "uppercase",
+            "color": "ink"
+          }
+        },
+        {
+          "component": "Divider",
+          "style": { "background": "accent", "borderRadius": 4 }
+        }
+      ]
+    },
+    {
+      "id": "headline",
+      "layer": 2,
+      "frame": { "x": 74, "y": 168, "width": 700, "height": 320 },
+      "children": [
+        {
+          "component": "RichText",
+          "slot": "headline",
+          "style": {
+            "fontFamily": "display",
+            "fontSize": 82,
+            "fontWeight": 800,
+            "lineHeight": 1.04,
+            "textTransform": "uppercase",
+            "color": "ink"
+          }
+        },
+        {
+          "component": "Text",
+          "slot": "subheadline",
+          "style": {
+            "fontSize": 32,
+            "lineHeight": 1.45,
+            "color": "onSurfaceMuted",
+            "paddingTop": 22
+          }
+        }
+      ]
+    },
+    {
+      "id": "heroArt",
+      "layer": 1,
+      "frame": { "x": 830, "y": 168, "width": 340, "height": 340 },
+      "clip": true,
+      "children": [
+        { "component": "Image", "slot": "heroImage", "mask": "arcBottom" }
+      ]
+    },
+    {
+      "id": "servicesTitle",
+      "layer": 2,
+      "frame": { "x": 74, "y": 530, "width": 700, "height": 70 },
+      "children": [
+        {
+          "component": "Badge",
+          "slot": "servicesTitle",
+          "style": {
+            "fontFamily": "display",
+            "fontSize": 28,
+            "fontWeight": 800,
+            "textTransform": "uppercase",
+            "background": "accent",
+            "color": "onAccent",
+            "paddingTop": 12,
+            "paddingBottom": 12,
+            "paddingLeft": 30,
+            "paddingRight": 30
+          }
+        }
+      ]
+    },
+    {
+      "id": "services",
+      "layer": 2,
+      "frame": { "x": 74, "y": 618, "width": 1092, "height": 300 },
+      "clip": true,
+      "children": [
+        {
+          "component": "List",
+          "slot": "services",
+          "style": {
+            "fontSize": 28,
+            "fontWeight": 600,
+            "lineHeight": 1.3,
+            "columns": 2,
+            "color": "onSurface"
+          }
+        }
+      ]
+    },
+    {
+      "id": "timings",
+      "layer": 2,
+      "frame": { "x": 74, "y": 940, "width": 1092, "height": 180 },
+      "clip": true,
+      "style": {
+        "background": "ink",
+        "borderRadius": 26,
+        "padding": 34
+      },
+      "children": [
+        {
+          "component": "KeyValue",
+          "slot": "timings",
+          "style": { "fontSize": 26, "lineHeight": 1.5, "color": "onInk", "gap": 8 }
+        }
+      ]
+    },
+    {
+      "id": "badges",
+      "layer": 2,
+      "frame": { "x": 74, "y": 1150, "width": 1092, "height": 150 },
+      "clip": true,
+      "children": [
+        {
+          "component": "List",
+          "slot": "badges",
+          "style": {
+            "fontSize": 20,
+            "fontWeight": 700,
+            "lineHeight": 1.25,
+            "variant": "cards",
+            "background": "surfaceAlt",
+            "borderRadius": 18,
+            "color": "ink",
+            "padding": 18
+          }
+        }
+      ]
+    },
+    {
+      "id": "cta",
+      "layer": 2,
+      "frame": { "x": 74, "y": 1330, "width": 1092, "height": 110 },
+      "children": [
+        {
+          "component": "CTAButton",
+          "slot": "cta",
+          "style": {
+            "fontFamily": "display",
+            "fontSize": 38,
+            "fontWeight": 800,
+            "background": "accent",
+            "color": "onAccent",
+            "borderRadius": 18,
+            "textAlign": "center"
+          }
+        }
+      ]
+    },
+    {
+      "id": "contact",
+      "layer": 3,
+      "frame": { "x": 0, "y": 1478, "width": 1240, "height": 276 },
+      "clip": true,
+      "style": {
+        "background": "ink",
+        "paddingTop": 44,
+        "paddingBottom": 44,
+        "paddingLeft": 74,
+        "paddingRight": 74,
+        "justify": "center"
+      },
+      "children": [
+        {
+          "component": "ContactBar",
+          "style": {
+            "fontSize": 24,
+            "lineHeight": 1.4,
+            "color": "onInk",
+            "direction": "column",
+            "gap": 16
+          }
+        }
+      ]
+    }
+  ]
+}

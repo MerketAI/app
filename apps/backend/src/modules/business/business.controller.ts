@@ -6,6 +6,7 @@ import {
   Delete,
   Body,
   Param,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -14,9 +15,10 @@ import {
   ApiResponse,
   ApiBearerAuth,
 } from '@nestjs/swagger';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { HybridAuthGuard } from '../partner/guards/hybrid-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { BusinessService } from './business.service';
+import { CompetitorAdsService } from './competitor-ads.service';
 import {
   UpdateBusinessProfileDto,
   CreateProductDto,
@@ -31,10 +33,13 @@ import {
 
 @ApiTags('Business')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(HybridAuthGuard)
 @Controller({ path: 'business', version: '1' })
 export class BusinessController {
-  constructor(private businessService: BusinessService) {}
+  constructor(
+    private businessService: BusinessService,
+    private competitorAdsService: CompetitorAdsService,
+  ) {}
 
   // ============================================
   // Business Profile
@@ -220,6 +225,49 @@ export class BusinessController {
     @Param('id') competitorId: string,
   ) {
     return this.businessService.deleteCompetitor(userId, competitorId);
+  }
+
+  // ============================================
+  // Competitor Ads (observed, not inferred)
+  // ============================================
+
+  @Get('competitors/:id/ads')
+  @ApiOperation({
+    summary: 'Ads observed running for a competitor',
+    description:
+      'Returns the last observed ads plus, separately and clearly labelled, the AI-estimated ad fields. Does not call the providers - use POST .../ads/refresh for that.',
+  })
+  @ApiResponse({ status: 200, description: 'Observed and estimated ad data' })
+  @ApiResponse({ status: 404, description: 'Competitor not found' })
+  async getCompetitorAds(
+    @CurrentUser('id') userId: string,
+    @Param('id') competitorId: string,
+  ) {
+    return this.competitorAdsService.getCompetitorAds(userId, competitorId);
+  }
+
+  @Post('competitors/:id/ads/refresh')
+  @ApiOperation({
+    summary: "Re-query public ad-transparency sources for a competitor",
+    description:
+      'Queries the Meta Ad Library and the Google Ads Transparency Center. Coverage is partial by source; any gaps are returned in coverageNotes.',
+  })
+  @ApiResponse({ status: 200, description: 'Freshly observed ads' })
+  @ApiResponse({ status: 404, description: 'Competitor not found' })
+  async refreshCompetitorAds(
+    @CurrentUser('id') userId: string,
+    @Param('id') competitorId: string,
+    @Query('countries') countries?: string,
+  ) {
+    return this.competitorAdsService.refreshCompetitorAds(
+      userId,
+      competitorId,
+      {
+        countries: countries
+          ? countries.split(',').map((c) => c.trim().toUpperCase())
+          : undefined,
+      },
+    );
   }
 
   // ============================================

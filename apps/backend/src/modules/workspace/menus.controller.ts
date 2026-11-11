@@ -18,12 +18,12 @@ import {
 } from '@nestjs/swagger';
 import { MenusService } from './menus.service';
 import { CreateMenuDto, UpdateMenuDto, UpdateMenuItemsDto } from './dto';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { HybridAuthGuard } from '../partner/guards/hybrid-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
 @ApiTags('workspace/menus')
 @Controller({ path: 'workspace/menus', version: '1' })
-@UseGuards(JwtAuthGuard)
+@UseGuards(HybridAuthGuard)
 @ApiBearerAuth()
 export class MenusController {
   constructor(private menusService: MenusService) {}

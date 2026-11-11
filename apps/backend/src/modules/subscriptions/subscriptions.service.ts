@@ -43,6 +43,9 @@ export const CREDIT_COSTS: Record<string, number> = {
   EMAIL_SEQUENCE: 20,
   DESIGN_GENERATE: 10,
   DESIGN_RENDER: 5,
+  AGENT_MESSAGE: 1,
+  // Artwork calls a paid image model, so it costs more than a layout.
+  ARTWORK_GENERATE: 25,
   VIDEO_GENERATE: 30,
   VIDEO_THUMBNAIL: 5,
   LINKEDIN_POST: 5,

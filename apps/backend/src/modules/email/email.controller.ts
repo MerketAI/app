@@ -29,12 +29,12 @@ import {
   CreateEmailSequenceDto,
   UpdateEmailSequenceDto,
 } from './dto/email.dto';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { HybridAuthGuard } from '../partner/guards/hybrid-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
 @ApiTags('email')
 @Controller({ path: 'email', version: '1' })
-@UseGuards(JwtAuthGuard)
+@UseGuards(HybridAuthGuard)
 @ApiBearerAuth()
 export class EmailController {
   constructor(private emailService: EmailService) {}

@@ -22,6 +22,8 @@ interface GoogleAdsCampaignData {
 }
 
 interface DailyMetric {
+  /** True when this record was synthesised because credentials were missing. */
+  isMockData?: boolean;
   date: string;
   impressions: number;
   clicks: number;
@@ -397,6 +399,7 @@ export class GoogleAdsService {
       const conversions = Math.floor(clicks * (Math.random() * 0.1 + 0.02));
 
       metrics.push({
+        isMockData: true,
         date: current.toISOString().split('T')[0],
         impressions,
         clicks,

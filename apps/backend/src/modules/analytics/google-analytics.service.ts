@@ -5,12 +5,16 @@ import { CredentialsService } from '../credentials/credentials.service';
 const GOOGLE_ANALYTICS_PLATFORM = 'GOOGLE_ANALYTICS';
 
 export interface GA4Property {
+  /** True when this record was synthesised because credentials were missing. */
+  isMockData?: boolean;
   propertyId: string;
   displayName: string;
   websiteUrl?: string;
 }
 
 export interface GA4DashboardData {
+  /** True when this record was synthesised because credentials were missing. */
+  isMockData?: boolean;
   sessions: number;
   users: number;
   newUsers: number;
@@ -21,6 +25,8 @@ export interface GA4DashboardData {
 }
 
 export interface GA4TrafficSource {
+  /** True when this record was synthesised because credentials were missing. */
+  isMockData?: boolean;
   source: string;
   medium: string;
   sessions: number;
@@ -575,16 +581,19 @@ export class GoogleAnalyticsService {
   private getMockProperties(): GA4Property[] {
     return [
       {
+        isMockData: true,
         propertyId: '123456789',
         displayName: 'Main Website',
         websiteUrl: 'https://www.example.com',
       },
       {
+        isMockData: true,
         propertyId: '987654321',
         displayName: 'Blog',
         websiteUrl: 'https://blog.example.com',
       },
       {
+        isMockData: true,
         propertyId: '456789123',
         displayName: 'Landing Pages',
         websiteUrl: 'https://landing.example.com',
@@ -594,6 +603,7 @@ export class GoogleAnalyticsService {
 
   private getMockDashboard(): GA4DashboardData {
     return {
+      isMockData: true,
       sessions: 5842,
       users: 4120,
       newUsers: 1856,
@@ -623,6 +633,6 @@ export class GoogleAnalyticsService {
       { source: 'google', medium: 'cpc', sessions: 408, users: 380, bounceRate: 0.35, avgSessionDuration: 110 },
       { source: 'newsletter', medium: 'email', sessions: 174, users: 150, bounceRate: 0.28, avgSessionDuration: 195 },
       { source: 'partner-blog', medium: 'referral', sessions: 135, users: 110, bounceRate: 0.42, avgSessionDuration: 140 },
-    ];
+    ].map((row) => ({ ...row, isMockData: true }));
   }
 }

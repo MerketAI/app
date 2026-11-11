@@ -3,4 +3,8 @@ builder = "RAILPACK"
 buildCommand = "npx prisma generate && npx nest build"
 
 [deploy]
+# Bring the database schema up to date before each release. db push refuses any
+# change that would drop data, so a destructive schema edit fails the deploy
+# instead of silently losing rows.
+preDeployCommand = "npx prisma db push --skip-generate"
 startCommand = "node dist/src/main"

@@ -5,6 +5,11 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SubscriptionsService } from '../subscriptions/subscriptions.service';
+import {
+  parseJsonArray,
+  normalizeHashtags,
+  formatHashtags,
+} from '../../common/utils/json-field.util';
 const Platform = { INSTAGRAM: 'INSTAGRAM', FACEBOOK: 'FACEBOOK', WORDPRESS: 'WORDPRESS', LINKEDIN: 'LINKEDIN', TIKTOK: 'TIKTOK' } as const;
 const ContentStatus = { DRAFT: 'DRAFT', READY: 'READY', SCHEDULED: 'SCHEDULED', PUBLISHING: 'PUBLISHING', PUBLISHED: 'PUBLISHED', FAILED: 'FAILED' } as const;
 const ContentType = { INSTAGRAM_IMAGE: 'INSTAGRAM_IMAGE', INSTAGRAM_CAROUSEL: 'INSTAGRAM_CAROUSEL', INSTAGRAM_REEL: 'INSTAGRAM_REEL', INSTAGRAM_STORY: 'INSTAGRAM_STORY', FACEBOOK_IMAGE: 'FACEBOOK_IMAGE', FACEBOOK_VIDEO: 'FACEBOOK_VIDEO', FACEBOOK_LINK: 'FACEBOOK_LINK', BLOG_POST: 'BLOG_POST' } as const;
@@ -15,6 +20,26 @@ interface PublishResult {
   platformPostId?: string;
   platformPostUrl?: string;
   error?: string;
+}
+
+/**
+ * A Content row with its JSON-encoded columns decoded into real arrays.
+ * Prisma returns `mediaUrls` / `hashtags` / `seoKeywords` as strings, so the
+ * platform adapters below must never be handed a raw row.
+ */
+interface PublishableContent {
+  id: string;
+  userId: string;
+  type: string;
+  title: string | null;
+  caption: string | null;
+  body: string | null;
+  seoTitle: string | null;
+  seoDescription: string | null;
+  mediaUrls: string[];
+  hashtags: string[];
+  seoKeywords: string[];
+  [key: string]: any;
 }
 
 @Injectable()
@@ -53,10 +78,22 @@ export class PublishingService {
       throw new BadRequestException('No platform connection specified');
     }
 
-    // Determine credit action if not already charged
+    // connectionId comes from the caller: never post through someone else's page.
+    if (connection.userId !== userId) {
+      throw new BadRequestException('Access denied');
+    }
+
+    // Only charge once per piece of content, and remember whether this call is
+    // the one that charged - a refund must not fire for credits it never took.
+    const creditAction = this.getCreditAction(content.type as ContentType);
+    let chargedHere = false;
     if (content.creditsConsumed === 0) {
-      const creditAction = this.getCreditAction(content.type as ContentType);
-      await this.subscriptionsService.consumeCredits(userId, creditAction, contentId);
+      await this.subscriptionsService.consumeCredits(
+        userId,
+        creditAction,
+        contentId,
+      );
+      chargedHere = true;
     }
 
     // Update status to publishing
@@ -67,22 +104,23 @@ export class PublishingService {
 
     try {
       let result: PublishResult;
+      const publishable = this.toPublishableContent(content);
 
       switch (connection.platform) {
         case Platform.INSTAGRAM:
-          result = await this.publishToInstagram(content, connection);
+          result = await this.publishToInstagram(publishable, connection);
           break;
         case Platform.FACEBOOK:
-          result = await this.publishToFacebook(content, connection);
+          result = await this.publishToFacebook(publishable, connection);
           break;
         case Platform.WORDPRESS:
-          result = await this.publishToWordPress(content, connection);
+          result = await this.publishToWordPress(publishable, connection);
           break;
         case Platform.LINKEDIN:
-          result = await this.publishToLinkedIn(content, connection);
+          result = await this.publishToLinkedIn(publishable, connection);
           break;
         case Platform.TIKTOK:
-          result = await this.publishToTikTok(content, connection);
+          result = await this.publishToTikTok(publishable, connection);
           break;
         default:
           throw new BadRequestException(`Publishing to ${connection.platform} is not supported yet`);
@@ -110,10 +148,13 @@ export class PublishingService {
           },
         });
 
-        // Refund credits on failure
-        const creditAction = this.getCreditAction(content.type as ContentType);
-        const credits = this.getCreditAmount(creditAction);
-        await this.subscriptionsService.refundCredits(userId, credits, 'Publishing failed');
+        if (chargedHere) {
+          await this.subscriptionsService.refundCredits(
+            userId,
+            this.getCreditAmount(creditAction),
+            'Publishing failed',
+          );
+        }
 
         throw new BadRequestException(result.error);
       }
@@ -129,18 +170,28 @@ export class PublishingService {
     }
   }
 
-  async publishToInstagram(content: any, connection: any): Promise<PublishResult> {
+  async publishToInstagram(
+    content: PublishableContent,
+    connection: any,
+  ): Promise<PublishResult> {
     const accessToken = connection.accessToken;
     const igUserId = connection.accountId;
 
     try {
       // Step 1: Create media container
-      let mediaUrl = content.mediaUrls?.[0];
+      const mediaUrl = content.mediaUrls[0];
       if (!mediaUrl) {
         return { success: false, error: 'Instagram requires at least one image' };
       }
+      const unreachable = this.assertPubliclyFetchable(mediaUrl, 'Instagram');
+      if (unreachable) {
+        return { success: false, error: unreachable };
+      }
 
-      const caption = `${content.caption || ''}${content.hashtags?.length ? '\n\n' + content.hashtags.map((h: string) => `#${h.replace('#', '')}`).join(' ') : ''}`;
+      const tags = formatHashtags(content.hashtags);
+      const caption = [content.caption || '', tags]
+        .filter(Boolean)
+        .join('\n\n');
 
       // Create container
       const containerResponse = await fetch(
@@ -197,13 +248,23 @@ export class PublishingService {
     }
   }
 
-  async publishToFacebook(content: any, connection: any): Promise<PublishResult> {
+  async publishToFacebook(
+    content: PublishableContent,
+    connection: any,
+  ): Promise<PublishResult> {
     const accessToken = connection.accessToken;
     const pageId = connection.accountId;
 
     try {
-      const message = content.caption || content.body || '';
-      const hasMedia = content.mediaUrls?.length > 0;
+      // Hashtags are part of the post body on Facebook - there is no separate
+      // field for them, so append them like the other platforms do.
+      const message = [
+        content.caption || content.body || '',
+        formatHashtags(content.hashtags),
+      ]
+        .filter(Boolean)
+        .join('\n\n');
+      const hasMedia = content.mediaUrls.length > 0;
 
       let endpoint = `https://graph.facebook.com/v18.0/${pageId}/feed`;
       const body: any = {
@@ -242,7 +303,10 @@ export class PublishingService {
     }
   }
 
-  async publishToWordPress(content: any, connection: any): Promise<PublishResult> {
+  async publishToWordPress(
+    content: PublishableContent,
+    connection: any,
+  ): Promise<PublishResult> {
     const accessToken = connection.accessToken;
     const siteId = connection.accountId;
 
@@ -260,7 +324,7 @@ export class PublishingService {
             content: content.body,
             status: 'publish',
             excerpt: content.seoDescription,
-            tags: content.seoKeywords?.join(','),
+            tags: content.seoKeywords.join(','),
           }),
         },
       );
@@ -281,13 +345,21 @@ export class PublishingService {
     }
   }
 
-  async publishToLinkedIn(content: any, connection: any): Promise<PublishResult> {
+  async publishToLinkedIn(
+    content: PublishableContent,
+    connection: any,
+  ): Promise<PublishResult> {
     const accessToken = connection.accessToken;
     const authorId = connection.accountId;
 
     try {
-      const text = content.caption || content.body || '';
-      const hasMedia = content.mediaUrls?.length > 0;
+      const text = [
+        content.caption || content.body || '',
+        formatHashtags(content.hashtags),
+      ]
+        .filter(Boolean)
+        .join('\n\n');
+      const hasMedia = content.mediaUrls.length > 0;
 
       const shareContent: any = {
         shareCommentary: {
@@ -350,20 +422,28 @@ export class PublishingService {
     }
   }
 
-  async publishToTikTok(content: any, connection: any): Promise<PublishResult> {
+  async publishToTikTok(
+    content: PublishableContent,
+    connection: any,
+  ): Promise<PublishResult> {
     const accessToken = connection.accessToken;
 
     try {
-      const mediaUrl = content.mediaUrls?.[0];
+      const mediaUrl = content.mediaUrls[0];
       if (!mediaUrl) {
         return { success: false, error: 'TikTok requires a video URL to publish' };
       }
+      const unreachable = this.assertPubliclyFetchable(mediaUrl, 'TikTok');
+      if (unreachable) {
+        return { success: false, error: unreachable };
+      }
 
       const caption = content.caption || content.title || '';
-      const hashtags = content.hashtags?.length
-        ? content.hashtags.map((h: string) => `#${h.replace('#', '')}`).join(' ')
-        : '';
-      const fullCaption = `${caption}${hashtags ? '\n\n' + hashtags : ''}`.substring(0, 2200);
+      const hashtags = formatHashtags(content.hashtags);
+      const fullCaption = [caption, hashtags]
+        .filter(Boolean)
+        .join('\n\n')
+        .substring(0, 2200);
 
       // Initialize content posting using TikTok Content Posting API
       const initResponse = await fetch(
@@ -413,18 +493,34 @@ export class PublishingService {
     }
   }
 
+  /**
+   * Publishes everything whose scheduled time has passed. Driven by the cron in
+   * SchedulerService; also callable by an admin for manual catch-up.
+   *
+   * Each row is claimed with a conditional update before it is published, so two
+   * overlapping runs (or two app instances) cannot post the same content twice.
+   */
   async processScheduledContent() {
-    const scheduledContent = await this.prisma.content.findMany({
+    const due = await this.prisma.content.findMany({
       where: {
         status: ContentStatus.SCHEDULED,
         scheduledAt: { lte: new Date() },
       },
-      include: { connection: true },
+      select: { id: true, userId: true, connectionId: true },
+      orderBy: { scheduledAt: 'asc' },
+      take: 100,
     });
 
     const results = [];
 
-    for (const content of scheduledContent) {
+    for (const content of due) {
+      // Claim it: only the run that flips SCHEDULED -> PUBLISHING proceeds.
+      const claim = await this.prisma.content.updateMany({
+        where: { id: content.id, status: ContentStatus.SCHEDULED },
+        data: { status: ContentStatus.PUBLISHING },
+      });
+      if (claim.count === 0) continue;
+
       try {
         const result = await this.publishNow(
           content.userId,
@@ -433,6 +529,7 @@ export class PublishingService {
         );
         results.push({ contentId: content.id, ...result });
       } catch (error) {
+        // publishNow already recorded FAILED and the error message.
         results.push({
           contentId: content.id,
           success: false,
@@ -441,7 +538,13 @@ export class PublishingService {
       }
     }
 
-    return { processed: results.length, results };
+    const succeeded = results.filter((r) => r.success).length;
+    return {
+      processed: results.length,
+      succeeded,
+      failed: results.length - succeeded,
+      results,
+    };
   }
 
   async getPublishingHistory(userId: string, limit = 20, offset = 0) {
@@ -472,6 +575,54 @@ export class PublishingService {
     ]);
 
     return { contents, total, limit, offset };
+  }
+
+  /**
+   * Decodes the JSON-encoded columns on a Content row. Prisma hands these back
+   * as strings, and every platform adapter below expects real arrays.
+   */
+  private toPublishableContent(content: any): PublishableContent {
+    return {
+      ...content,
+      mediaUrls: parseJsonArray<string>(content.mediaUrls),
+      hashtags: normalizeHashtags(content.hashtags),
+      seoKeywords: parseJsonArray<string>(content.seoKeywords),
+    };
+  }
+
+  /**
+   * Instagram and TikTok fetch the asset themselves, so the URL has to be
+   * reachable from the public internet. Catching this here produces a clear
+   * error instead of an opaque rejection from the platform.
+   */
+  private assertPubliclyFetchable(
+    url: string | undefined,
+    platform: string,
+  ): string | null {
+    if (!url) return null;
+
+    let parsed: URL;
+    try {
+      parsed = new URL(url);
+    } catch {
+      return `${platform} needs an absolute media URL; received "${url}"`;
+    }
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+      return `${platform} media URL must be http(s); received "${parsed.protocol}"`;
+    }
+    const host = parsed.hostname.toLowerCase();
+    const isLocal =
+      host === 'localhost' ||
+      host === '127.0.0.1' ||
+      host === '0.0.0.0' ||
+      host.endsWith('.local') ||
+      host.startsWith('192.168.') ||
+      host.startsWith('10.') ||
+      /^172\.(1[6-9]|2\d|3[01])\./.test(host);
+    if (isLocal) {
+      return `${platform} must be able to download the media, but "${host}" is not reachable from the internet. Upload the asset first (POST /api/v1/upload/image).`;
+    }
+    return null;
   }
 
   private getCreditAction(contentType: ContentType): string {

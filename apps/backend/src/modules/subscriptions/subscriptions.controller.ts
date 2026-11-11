@@ -28,7 +28,7 @@ import {
   TIER_CREDITS,
   TIER_PRICES,
 } from './dto/subscription.dto';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { HybridAuthGuard } from '../partner/guards/hybrid-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
 import Stripe from 'stripe';
@@ -60,7 +60,7 @@ export class SubscriptionsController {
   }
 
   @Get()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(HybridAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get current subscription' })
   async getSubscription(@CurrentUser('id') userId: string) {
@@ -68,7 +68,7 @@ export class SubscriptionsController {
   }
 
   @Post()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(HybridAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Create subscription' })
   async createSubscription(
@@ -79,7 +79,7 @@ export class SubscriptionsController {
   }
 
   @Put()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(HybridAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Update subscription (upgrade/downgrade)' })
   async updateSubscription(
@@ -90,7 +90,7 @@ export class SubscriptionsController {
   }
 
   @Delete()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(HybridAuthGuard)
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Cancel subscription' })
@@ -99,7 +99,7 @@ export class SubscriptionsController {
   }
 
   @Get('credits')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(HybridAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get credit balance' })
   async getCredits(@CurrentUser('id') userId: string) {
@@ -107,7 +107,7 @@ export class SubscriptionsController {
   }
 
   @Get('credits/history')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(HybridAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get credit transaction history' })
   async getCreditHistory(

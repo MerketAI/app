@@ -11,7 +11,7 @@ import {
   ApiResponse,
   ApiBearerAuth,
 } from '@nestjs/swagger';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { HybridAuthGuard } from '../partner/guards/hybrid-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { AiScraperService } from './ai-scraper.service';
 import {
@@ -26,7 +26,7 @@ import {
 
 @ApiTags('AI Scraper')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(HybridAuthGuard)
 @Controller({ path: 'ai-scraper', version: '1' })
 export class AiScraperController {
   constructor(private aiScraperService: AiScraperService) {}

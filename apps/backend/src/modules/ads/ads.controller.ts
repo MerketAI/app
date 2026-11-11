@@ -23,12 +23,12 @@ import {
   UpdateCampaignDto,
   CampaignFilterDto,
 } from './dto/ads.dto';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { HybridAuthGuard } from '../partner/guards/hybrid-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
 @ApiTags('ads')
 @Controller({ path: 'ads', version: '1' })
-@UseGuards(JwtAuthGuard)
+@UseGuards(HybridAuthGuard)
 @ApiBearerAuth()
 export class AdsController {
   constructor(private adsService: AdsService) {}
