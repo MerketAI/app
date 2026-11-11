@@ -81,6 +81,11 @@ export class UpdateBusinessProfileDto {
   @IsOptional()
   website?: string;
 
+  @ApiPropertyOptional({ description: 'Public business phone for posts and flyers.' })
+  @IsString()
+  @IsOptional()
+  contactPhone?: string;
+
   @ApiPropertyOptional()
   @IsOptional()
   socialLinks?: Record<string, string>;

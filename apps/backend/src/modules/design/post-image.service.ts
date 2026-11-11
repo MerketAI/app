@@ -1,3 +1,4 @@
+import { stripPlaceholders } from './placeholders';
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ImageGenerationService } from '../assets/image-generation.service';
@@ -172,7 +173,9 @@ export class PostImageService {
     private designer: DesignerService,
   ) {}
 
-  async compose(userId: string, input: PostImageInput): Promise<PostImageResult> {
+  async compose(userId: string, rawInput: PostImageInput): Promise<PostImageResult> {
+    // "[Phone Number]"-style placeholders never reach an image; say which were missing.
+    const { copy: input, removed: placeholders } = stripPlaceholders(rawInput);
     if (!input.headline?.trim()) throw new BadRequestException('A post image needs a headline.');
     const direction: ArtDirection | undefined = input.artDirection?.subject?.trim()
       ? input.artDirection
@@ -200,6 +203,9 @@ export class PostImageService {
     const filing = { folder: input.folder, tags: input.tags };
 
     const warnings: string[] = [];
+    if (placeholders.length) {
+      warnings.push(`Left off the image because they were placeholders, not real details: ${placeholders.join(', ')}. Ask the provider for them.`);
+    }
     if (input.logo === 'show' && !input.logoUrl && !profile?.logoUrl) {
       warnings.push('No logo is on file for this provider, so the logo space was left out.');
     }
