@@ -80,6 +80,8 @@ model UserProfile {
   city             String?
   timezone         String   @default("UTC")
   website          String?
+  /// Public business phone for posts and flyers (not a login number).
+  contactPhone     String?  @map("contact_phone")
   socialLinks      String   @default("{}") @map("social_links") // JSON: {facebook, instagram, linkedin, etc.}
 
   // Branding - Basic
