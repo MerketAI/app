@@ -212,3 +212,69 @@ describe('AgentService', () => {
     expect(JSON.parse(stored[1].content)).toEqual([thinking, text('Hi')]);
   });
 });
+
+describe('conversationView', () => {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { conversationView } = require('./agent.service');
+  const msg = (role: string, ...blocks: unknown[]) => ({ role, content: JSON.stringify(blocks) });
+  const result = (id: string, out: unknown, is_error = false) => ({ type: 'tool_result', tool_use_id: id, content: JSON.stringify(out), is_error });
+
+  it('gives each turn’s drafts to its last reply, and hides tool traffic', () => {
+    const view = conversationView([
+      msg('user', text('Make an eye camp post')),
+      msg('assistant', text('Designing it now.'), toolUse('t1', 'create_post_image')),
+      msg('user', result('t1', { url: 'x' })),
+      msg('assistant', toolUse('t2', 'save_post_draft')),
+      msg('user', result('t2', { saved: true, draftId: 'd1' })),
+      msg('assistant', text('Here is your post.')),
+      msg('user', text('Make it shorter')),
+      msg('assistant', toolUse('t3', 'update_post_draft')),
+      msg('user', result('t3', { updated: true, draftId: 'd1' })),
+      msg('assistant', text('Shortened.')),
+    ]);
+    expect(view.map((m: any) => [m.role, m.text, m.draftIds])).toEqual([
+      ['user', 'Make an eye camp post', []],
+      ['assistant', 'Designing it now.', []],
+      ['assistant', 'Here is your post.', ['d1']],
+      ['user', 'Make it shorter', []],
+      ['assistant', 'Shortened.', ['d1']],
+    ]);
+  });
+
+  it('ignores failed draft calls and other tools', () => {
+    const view = conversationView([
+      msg('user', text('Post please')),
+      msg('assistant', toolUse('t1', 'save_post_draft'), toolUse('t2', 'get_draft')),
+      msg('user', { type: 'tool_result', tool_use_id: 't1', is_error: true, content: 'Instagram posts need an image.' }, result('t2', { draftId: 'old' })),
+      msg('assistant', text('I need an image first.')),
+    ]);
+    expect(view[1].draftIds).toEqual([]);
+  });
+});
+
+describe('images a reply made', () => {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { conversationView, unclaimedImages, imagesFrom } = require('./agent.service');
+  const msg = (role: string, ...blocks: unknown[]) => ({ role, content: JSON.stringify(blocks) });
+  const result = (id: string, out: unknown) => ({ type: 'tool_result', tool_use_id: id, content: JSON.stringify(out) });
+  const flyer = { url: 'https://cdn.test/a4.png', label: 'A4 flyer', width: 2480, height: 3508, spec: 'print-a4' };
+  const square = { url: 'https://cdn.test/sq.png', label: 'Instagram square', width: 1080, height: 1080, spec: 'instagram-feed-square' };
+
+  it('reads every rendered size from a create_post_image result', () => {
+    expect(imagesFrom({ url: flyer.url, sizes: [flyer, square] }).map((i: any) => i.url)).toEqual([flyer.url, square.url]);
+    expect(imagesFrom(null)).toEqual([]);
+  });
+
+  it('keeps a flyer with no draft on the reply, and drops images a draft already shows', () => {
+    const view = conversationView([
+      msg('user', text('Make an A4 flyer and an Instagram post')),
+      msg('assistant', toolUse('t1', 'create_post_image'), toolUse('t2', 'create_post_image')),
+      msg('user', result('t1', { url: flyer.url, sizes: [flyer] }), result('t2', { url: square.url, sizes: [square] })),
+      msg('assistant', toolUse('t3', 'save_post_draft')),
+      msg('user', result('t3', { saved: true, draftId: 'd1' })),
+      msg('assistant', text('Here are both.')),
+    ]);
+    expect(view[1].images.map((i: any) => i.url)).toEqual([flyer.url, square.url]);
+    expect(unclaimedImages(view[1].images, [{ mediaUrls: [square.url] }]).map((i: any) => i.label)).toEqual(['A4 flyer']);
+  });
+});
