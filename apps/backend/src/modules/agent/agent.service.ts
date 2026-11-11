@@ -259,28 +259,64 @@ const TOOLS: any[] = [
   },
 ];
 
+/** An image a reply made, shown as its own card (a flyer, banner or any size). */
+export interface MadeImage {
+  url: string;
+  label: string;
+  width: number;
+  height: number;
+  spec?: string;
+}
+
 export interface AgentReply {
   conversationId: string;
   reply: string;
   drafts: Array<Record<string, unknown>>;
+  /** Images made this turn that no draft carries (flyers, banners, spare sizes). */
+  images: MadeImage[];
 }
 
 const DRAFT_TOOLS = new Set(['save_post_draft', 'update_post_draft']);
 
+/** The sizes a create_post_image result rendered, as image cards. */
+export function imagesFrom(result: any): MadeImage[] {
+  const sizes = Array.isArray(result?.sizes) ? result.sizes : result?.url ? [result] : [];
+  return sizes
+    .filter((s: any) => typeof s?.url === 'string' && s.url)
+    .map((s: any) => ({ url: s.url, label: s.label || s.spec || 'Image', width: s.width, height: s.height, spec: s.spec }));
+}
+
+/** Images not already on one of the drafts' cards, each once. */
+export function unclaimedImages(images: MadeImage[], drafts: Array<{ mediaUrls?: unknown }>): MadeImage[] {
+  const claimed = new Set(drafts.flatMap((d) => (Array.isArray(d.mediaUrls) ? d.mediaUrls : []) as string[]));
+  const seen = new Set<string>();
+  return images.filter((i) => !claimed.has(i.url) && !seen.has(i.url) && seen.add(i.url));
+}
+
+const parseResult = (b: any) => {
+  try { return JSON.parse(typeof b.content === 'string' ? b.content : b.content?.[0]?.text || ''); } catch { return null; }
+};
+
 /**
  * The messages a person saw, each assistant reply carrying the ids of the drafts its
- * turn saved or revised. A turn runs from one thing the person typed to the next; its
- * drafts belong to the last reply in it, which is where the cards were shown.
+ * turn saved or revised and the images it made. A turn runs from one thing the person
+ * typed to the next; what it made belongs to its last reply, where the cards were shown.
  */
 export function conversationView(stored: Array<{ role: string; content: string }>) {
-  const out: Array<{ role: string; text: string; draftIds: string[] }> = [];
+  type Entry = { role: string; text: string; draftIds: string[]; images: MadeImage[] };
+  const out: Entry[] = [];
   const toolNames = new Map<string, string>();
-  let pending: string[] = [];
-  let lastReply: { draftIds: string[] } | undefined;
+  let pendingDrafts: string[] = [];
+  let pendingImages: MadeImage[] = [];
+  let lastReply: Entry | undefined;
 
   const flush = () => {
-    if (lastReply && pending.length) lastReply.draftIds = [...new Set([...lastReply.draftIds, ...pending])];
-    pending = [];
+    if (lastReply) {
+      lastReply.draftIds = [...new Set([...lastReply.draftIds, ...pendingDrafts])];
+      lastReply.images = [...lastReply.images, ...pendingImages];
+    }
+    pendingDrafts = [];
+    pendingImages = [];
   };
 
   for (const m of stored) {
@@ -290,11 +326,13 @@ export function conversationView(stored: Array<{ role: string; content: string }
 
     for (const b of blocks) {
       if (b.type === 'tool_use') toolNames.set(b.id, b.name);
-      if (b.type === 'tool_result' && !b.is_error && DRAFT_TOOLS.has(toolNames.get(b.tool_use_id) || '')) {
-        try {
-          const result = JSON.parse(typeof b.content === 'string' ? b.content : b.content?.[0]?.text || '');
-          if (result && result.draftId) pending.push(result.draftId);
-        } catch { /* not JSON: no draft */ }
+      if (b.type !== 'tool_result' || b.is_error) continue;
+      const tool = toolNames.get(b.tool_use_id) || '';
+      if (DRAFT_TOOLS.has(tool)) {
+        const result = parseResult(b);
+        if (result && result.draftId) pendingDrafts.push(result.draftId);
+      } else if (tool === 'create_post_image') {
+        pendingImages.push(...imagesFrom(parseResult(b)));
       }
     }
 
@@ -303,9 +341,9 @@ export function conversationView(stored: Array<{ role: string; content: string }
     if (m.role === 'user') {
       flush();
       lastReply = undefined;
-      out.push({ role: m.role, text, draftIds: [] });
+      out.push({ role: m.role, text, draftIds: [], images: [] });
     } else {
-      const entry = { role: m.role, text, draftIds: [] as string[] };
+      const entry: Entry = { role: m.role, text, draftIds: [], images: [] };
       out.push(entry);
       lastReply = entry;
     }
@@ -387,6 +425,7 @@ export class AgentService {
     await this.remember(conversation.id, firstTurn, messages);
 
     const drafts: AgentReply['drafts'] = [];
+    const made: MadeImage[] = [];
     let reply = '';
 
     for (let step = 0; step < MAX_STEPS; step++) {
@@ -415,6 +454,7 @@ export class AgentService {
       for (const call of calls) {
         try {
           const output = await this.runTool(userId, call, drafts);
+          if (call.name === 'create_post_image') made.push(...imagesFrom(output));
           results.push({ type: 'tool_result', tool_use_id: call.id, content: JSON.stringify(output) });
         } catch (error) {
           results.push({
@@ -432,7 +472,7 @@ export class AgentService {
       where: { id: conversation.id },
       data: { updatedAt: new Date() },
     });
-    return { conversationId: conversation.id, reply, drafts };
+    return { conversationId: conversation.id, reply, drafts, images: unclaimedImages(made, drafts as any) };
   }
 
   private async ask(client: Anthropic, messages: Anthropic.MessageParam[]) {
@@ -714,9 +754,15 @@ export class AgentService {
       status: row.status,
     }]));
 
-    const messages = visible.map(({ role, text, draftIds }) => {
-      const drafts = draftIds.map((d) => byId.get(d)).filter(Boolean);
-      return drafts.length ? { role, text, drafts } : { role, text };
+    const messages = visible.map(({ role, text, draftIds, images }) => {
+      const drafts = draftIds.map((d) => byId.get(d)).filter(Boolean) as Array<{ mediaUrls: string[] }>;
+      const spare = unclaimedImages(images, drafts);
+      return {
+        role,
+        text,
+        ...(drafts.length ? { drafts } : {}),
+        ...(spare.length ? { images: spare } : {}),
+      };
     });
     return { id: conversation.id, title: conversation.title, messages };
   }

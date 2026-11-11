@@ -251,3 +251,30 @@ describe('conversationView', () => {
     expect(view[1].draftIds).toEqual([]);
   });
 });
+
+describe('images a reply made', () => {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { conversationView, unclaimedImages, imagesFrom } = require('./agent.service');
+  const msg = (role: string, ...blocks: unknown[]) => ({ role, content: JSON.stringify(blocks) });
+  const result = (id: string, out: unknown) => ({ type: 'tool_result', tool_use_id: id, content: JSON.stringify(out) });
+  const flyer = { url: 'https://cdn.test/a4.png', label: 'A4 flyer', width: 2480, height: 3508, spec: 'print-a4' };
+  const square = { url: 'https://cdn.test/sq.png', label: 'Instagram square', width: 1080, height: 1080, spec: 'instagram-feed-square' };
+
+  it('reads every rendered size from a create_post_image result', () => {
+    expect(imagesFrom({ url: flyer.url, sizes: [flyer, square] }).map((i: any) => i.url)).toEqual([flyer.url, square.url]);
+    expect(imagesFrom(null)).toEqual([]);
+  });
+
+  it('keeps a flyer with no draft on the reply, and drops images a draft already shows', () => {
+    const view = conversationView([
+      msg('user', text('Make an A4 flyer and an Instagram post')),
+      msg('assistant', toolUse('t1', 'create_post_image'), toolUse('t2', 'create_post_image')),
+      msg('user', result('t1', { url: flyer.url, sizes: [flyer] }), result('t2', { url: square.url, sizes: [square] })),
+      msg('assistant', toolUse('t3', 'save_post_draft')),
+      msg('user', result('t3', { saved: true, draftId: 'd1' })),
+      msg('assistant', text('Here are both.')),
+    ]);
+    expect(view[1].images.map((i: any) => i.url)).toEqual([flyer.url, square.url]);
+    expect(unclaimedImages(view[1].images, [{ mediaUrls: [square.url] }]).map((i: any) => i.label)).toEqual(['A4 flyer']);
+  });
+});
