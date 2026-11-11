@@ -1,4 +1,4 @@
-import { IsString, IsNumber, IsOptional, IsBoolean, IsArray, Min, Max } from 'class-validator';
+import { IsString, IsNumber, IsOptional, IsBoolean, IsArray, IsUrl, MaxLength, Min, Max } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 // ============================================
@@ -229,6 +229,17 @@ export class UpdateBusinessProfileDto {
   @IsString()
   @IsOptional()
   visualStyle?: string;
+
+  /**
+   * Public https link to the logo, e.g. a partner's brand-kit upload. Post
+   * images and designs place it (they already read userProfile.logoUrl).
+   * null clears it.
+   */
+  @ApiPropertyOptional({ nullable: true, example: 'https://static-assets.example.com/brand-kit/logo.png' })
+  @IsOptional()
+  @IsUrl({ protocols: ['https'], require_protocol: true }, { message: 'logoUrl must be a public https link' })
+  @MaxLength(500)
+  logoUrl?: string | null;
 }
 
 // ============================================
