@@ -287,10 +287,52 @@ export function withAlpha(hex: string, alpha: number): string {
   return `${hex}${a}`;
 }
 
-/** Google Fonts @import line for a type pair. */
-export function fontImport(pair: TypePair): string {
-  const families = pair.googleFamilies
+/** Google Fonts @import line for a type pair, plus any extra families (e.g. Indian scripts). */
+export function fontImport(pair: TypePair, extra: string[] = []): string {
+  const families = [...pair.googleFamilies, ...extra]
     .map((f) => `family=${f}`)
     .join('&');
   return `@import url('https://fonts.googleapis.com/css2?${families}&display=swap');`;
+}
+
+/**
+ * Indian scripts and the Noto family that draws each. The theme's Latin faces stay
+ * first in the stack; the browser falls back per character, so a Hindi headline
+ * with an English clinic name uses both.
+ */
+const INDIAN_SCRIPTS: Array<{ script: string; range: RegExp; family: string; css: string }> = [
+  { script: 'Devanagari', range: /[ऀ-ॿ]/, family: 'Noto+Sans+Devanagari:wght@400;500;600;700;800', css: "'Noto Sans Devanagari'" },
+  { script: 'Bengali', range: /[ঀ-৿]/, family: 'Noto+Sans+Bengali:wght@400;500;600;700;800', css: "'Noto Sans Bengali'" },
+  { script: 'Gurmukhi', range: /[਀-੿]/, family: 'Noto+Sans+Gurmukhi:wght@400;500;600;700;800', css: "'Noto Sans Gurmukhi'" },
+  { script: 'Gujarati', range: /[઀-૿]/, family: 'Noto+Sans+Gujarati:wght@400;500;600;700;800', css: "'Noto Sans Gujarati'" },
+  { script: 'Oriya', range: /[଀-୿]/, family: 'Noto+Sans+Oriya:wght@400;500;600;700;800', css: "'Noto Sans Oriya'" },
+  { script: 'Tamil', range: /[஀-௿]/, family: 'Noto+Sans+Tamil:wght@400;500;600;700;800', css: "'Noto Sans Tamil'" },
+  { script: 'Telugu', range: /[ఀ-౿]/, family: 'Noto+Sans+Telugu:wght@400;500;600;700;800', css: "'Noto Sans Telugu'" },
+  { script: 'Kannada', range: /[ಀ-೿]/, family: 'Noto+Sans+Kannada:wght@400;500;600;700;800', css: "'Noto Sans Kannada'" },
+  { script: 'Malayalam', range: /[ഀ-ൿ]/, family: 'Noto+Sans+Malayalam:wght@400;500;600;700;800', css: "'Noto Sans Malayalam'" },
+  { script: 'Arabic', range: /[؀-ۿ]/, family: 'Noto+Naskh+Arabic:wght@400;500;600;700', css: "'Noto Naskh Arabic'" },
+];
+
+export interface ScriptFonts {
+  /** Scripts found, e.g. ["Devanagari"]. */
+  scripts: string[];
+  /** Families to add to the @import. */
+  families: string[];
+  /** CSS family names to append to a font stack. */
+  stack: string;
+}
+
+/** The Indian (and Urdu) scripts in some text, and the fonts they need. */
+export function scriptFonts(text: string): ScriptFonts {
+  const found = INDIAN_SCRIPTS.filter((s) => s.range.test(text));
+  return { scripts: found.map((s) => s.script), families: found.map((s) => s.family), stack: found.map((s) => s.css).join(', ') };
+}
+
+/** A font stack with script fallbacks inserted before the generic family. */
+export function withScripts(stack: string, fallbacks: string): string {
+  if (!fallbacks) return stack;
+  const parts = stack.split(',').map((p) => p.trim());
+  const generic = parts.findIndex((p) => /^(system-ui|sans-serif|serif|Georgia)$/.test(p));
+  if (generic < 0) return `${stack}, ${fallbacks}`;
+  return [...parts.slice(0, generic), fallbacks, ...parts.slice(generic)].join(', ');
 }

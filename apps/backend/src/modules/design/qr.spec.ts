@@ -51,3 +51,26 @@ describe('booking QR codes', () => {
     expect(html).toContain('Scan to book');
   });
 });
+
+describe('Indian scripts on post images', () => {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { scriptFonts, withScripts } = require('./templates/tokens');
+
+  it('finds the scripts in the copy and the fonts they need', () => {
+    expect(scriptFonts('Free eye camp').scripts).toEqual([]);
+    expect(scriptFonts('मुफ़्त नेत्र जाँच — Vision Eye Centre').scripts).toEqual(['Devanagari']);
+    expect(scriptFonts('இலவச கண் பரிசோதனை').families[0]).toMatch(/^Noto\+Sans\+Tamil/);
+  });
+
+  it('puts the script font before the generic family', () => {
+    expect(withScripts("'Poppins', system-ui, sans-serif", "'Noto Sans Tamil'")).toBe("'Poppins', 'Noto Sans Tamil', system-ui, sans-serif");
+    expect(withScripts("'Poppins', system-ui, sans-serif", '')).toBe("'Poppins', system-ui, sans-serif");
+  });
+
+  it('loads the font and marks the page Hindi when the text is', () => {
+    const html = buildPostLayout({ headline: 'मुफ़्त नेत्र जाँच शिविर', artworkUrl: 'https://x/a.png' });
+    expect(html).toContain('lang="hi"');
+    expect(html).toContain('Noto+Sans+Devanagari');
+    expect(buildPostLayout({ headline: 'Free eye camp', artworkUrl: 'https://x/a.png' })).not.toContain('Noto+Sans');
+  });
+});
