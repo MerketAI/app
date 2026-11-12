@@ -82,6 +82,8 @@ model UserProfile {
   website          String?
   /// Public business phone for posts and flyers (not a login number).
   contactPhone     String?  @map("contact_phone")
+  /// The provider's public booking page, for "Book now" links and QR codes.
+  bookingUrl       String?  @map("booking_url")
   socialLinks      String   @default("{}") @map("social_links") // JSON: {facebook, instagram, linkedin, etc.}
 
   // Branding - Basic

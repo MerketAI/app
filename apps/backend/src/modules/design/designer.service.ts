@@ -28,6 +28,8 @@ export interface DesignerInput {
   logo?: Buffer;
   /** Keep an empty corner for a logo to be added later (when there is no logo). */
   reserveLogo?: boolean;
+  /** Keep this area (qrSpaceWords) empty: a "Scan to book" code is stamped there afterwards. */
+  qrSpace?: string;
   /** A photograph to build the design around (e.g. a library picture being reused). */
   photo?: Buffer;
   /** Style/mood references: never copied, only followed. */
@@ -111,6 +113,9 @@ export function composeDesignerPrompt(input: DesignerInput, size: { width: numbe
       : input.reserveLogo
         ? `LOGO SPACE: leave ${LOGO_SPACE} completely empty - plain background only, no text, shapes, people or objects - so a logo can be added later. Do not draw a logo and do not write any placeholder text there or anywhere.`
         : 'LOGO: there is no logo. Do not draw one and do not write any placeholder such as "logo", "your logo here" or "clinic name".',
+    input.qrSpace
+      ? `QR SPACE: leave ${input.qrSpace} completely empty - plain background or soft out-of-focus picture only, no text, icons, people's faces or key objects - because a QR code will be placed there afterwards. Do not draw a QR code or any placeholder for one.`
+      : '',
     input.references?.length
       ? `REFERENCE: the last ${input.references.length > 1 ? `${input.references.length} provided images are` : 'provided image is'} style ${input.references.length > 1 ? 'references' : 'reference'} only - follow the mood, colours and layout ideas, but never copy their text, people, faces or logos.`
       : '',
@@ -248,6 +253,9 @@ export class DesignerService {
                 'Report as problems: any required text that is missing, misspelt, cut off or unreadable; any number, price, phone number, date or percentage that differs; and any other words or numbers in the image that are not in the list above (for example invented offers, phone numbers, web addresses, "logo here" placeholders, badges or certifications). Ignore purely decorative marks.',
                 input.reserveLogo && !input.logo
                   ? `Also check that ${LOGO_SPACE} is empty (plain background, nothing placed there); if anything is in it, report "the logo space is not empty".`
+                  : '',
+                input.qrSpace
+                  ? `Also check that ${input.qrSpace} has no text, icons or faces in it (a QR code goes there); if it does, report "the QR space is not empty".`
                   : '',
                 'Also describe in one plain sentence what the picture shows (people, setting, main objects), as you see it.',
                 'Reply with JSON only: {"transcript": "<all text you can read>", "imagery": "<one sentence>", "problems": ["<short description>", ...]}',

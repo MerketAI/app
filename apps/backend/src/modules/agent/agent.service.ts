@@ -12,6 +12,7 @@ import { CredentialsService } from '../credentials/credentials.service';
 import { PostImageService } from '../design/post-image.service';
 import { CREATIVE_SPECS, SPEC_IDS } from '../design/creative-specs';
 import { THEME_IDS, THEMES } from '../design/post-themes';
+import { bookingLinks } from '../design/qr';
 import { LIBRARY_ROOTS, LibraryService } from '../library/library.service';
 import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 import { AGENT_SYSTEM_PROMPT } from './agent.prompt';
@@ -132,9 +133,14 @@ const TOOLS: any[] = [
           type: 'array',
           items: { type: 'string' },
           maxItems: 4,
-          description: 'Footer band lines: business name first, then phone and location. Placeholders like "[Phone Number]" are kept as written.',
+          description: 'Footer band lines: business name first, then phone and location. Only real details; placeholders like "[Phone Number]" are removed.',
         },
         logo: { type: 'string', enum: ['show', 'reserve', 'none'], description: '"reserve" keeps empty space for a logo; "show" uses the logo on file.' },
+        booking_qr: {
+          type: 'boolean',
+          description:
+            'Add a "Scan to book" QR code (bottom-right) that opens the provider\'s Quick Care booking page, tagged with the platform and campaign folder. Needs bookingUrl in the profile. Use it on flyers, posters, print and offers where booking is the goal.',
+        },
         footer: { type: 'string', description: 'A single footer line, e.g. a co-host.' },
         fine_print: { type: 'string', description: 'E.g. "T&C apply".' },
         mode: {
@@ -502,8 +508,11 @@ export class AgentService {
   ): Promise<unknown> {
     const input = call.input as Record<string, any>;
     switch (call.name) {
-      case 'get_business_profile':
-        return this.business.getBusinessProfile(userId);
+      case 'get_business_profile': {
+        const profile = await this.business.getBusinessProfile(userId);
+        // Ready-made, tagged links so captions never carry a hand-built URL.
+        return { ...profile, bookingLinks: bookingLinks((profile as { bookingUrl?: string | null }).bookingUrl) };
+      }
 
       case 'list_connected_accounts':
         return this.prisma.platformConnection.findMany({
@@ -537,6 +546,7 @@ export class AgentService {
           cta: input.cta,
           footerLines: input.footer_lines,
           logo: input.logo,
+          bookingQr: input.booking_qr === true,
           footer: input.footer,
           finePrint: input.fine_print,
           folder: input.folder,
