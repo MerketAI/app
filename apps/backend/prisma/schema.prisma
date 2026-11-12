@@ -539,6 +539,9 @@ model Content {
   publishedAt      DateTime? @map("published_at")
   creditsConsumed  Int       @default(0) @map("credits_consumed")
   errorMessage     String?   @map("error_message")
+  /// The day a draft is planned for on the content calendar (midday IST). Planning
+  /// never publishes: only scheduledAt, set by the provider, does.
+  plannedFor       DateTime? @map("planned_for")
   createdAt        DateTime  @default(now()) @map("created_at")
   updatedAt        DateTime  @updatedAt @map("updated_at")
 
@@ -549,6 +552,7 @@ model Content {
 
   @@index([userId, status])
   @@index([userId, scheduledAt])
+  @@index([userId, plannedFor])
   @@map("contents")
 }
 
