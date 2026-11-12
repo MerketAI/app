@@ -20,7 +20,7 @@
  */
 import { CreativeSpec, familyOf, LayoutFamily, resolveSpec, SafeArea } from './creative-specs';
 import { PostTheme, ThemeColours, ThemeId, THEMES } from './post-themes';
-import { fontImport } from './templates/tokens';
+import { fontImport, scriptFonts, withScripts } from './templates/tokens';
 import { qrPlateHtml } from './qr';
 
 /** The original four formats; still accepted, now mapped to specs. */
@@ -79,7 +79,7 @@ export interface PostLayoutInput extends PostCopy {
 }
 
 /** Theme colours and fonts as CSS custom properties. */
-function themeVariables(theme: PostTheme, c: ThemeColours): string {
+function themeVariables(theme: PostTheme, c: ThemeColours, scriptStack = ''): string {
   const vars: Record<string, string> = {
     '--c': c.primary, '--deep': c.deep, '--accent': c.accent, '--ink': c.ink, '--text': c.text, '--muted': c.muted,
     '--bg': c.background, '--card': c.card, '--cardBorder': c.cardBorder, '--iconBg': c.iconBg,
@@ -87,7 +87,7 @@ function themeVariables(theme: PostTheme, c: ThemeColours): string {
     '--ctaFrom': c.ctaFrom, '--ctaTo': c.ctaTo, '--ctaText': c.ctaText,
     '--footFrom': c.footerFrom, '--footTo': c.footerTo, '--footText': c.footerText,
     '--decor': c.decor, '--decorAlt': c.decorAlt,
-    '--display': theme.type.display, '--body': theme.type.body,
+    '--display': withScripts(theme.type.display, scriptStack), '--body': withScripts(theme.type.body, scriptStack),
     // Display faces differ in optical size; scale headline and price, not via zoom (it confuses the fit pass).
     '--ds': String(theme.type.displayScale),
   };
@@ -268,7 +268,17 @@ export function buildPostLayout(input: PostLayoutInput): string {
   const safe: SafeArea = { top: 0, right: 0, bottom: 0, left: 0, ...spec.safe };
   const colour = input.colour || DEFAULT_COLOUR;
   const theme = THEMES[input.theme || 'clinical-clean'] || THEMES['clinical-clean'];
-  const themeVars = themeVariables(theme, theme.colours(colour));
+  // Hindi, Tamil, Telugu...: load the script's font and give its marks room above and below.
+  const scripts = scriptFonts(
+    [input.businessName, input.headline, input.subheading, input.price, input.priceNote, input.itemsNote, input.cta, input.footer, input.finePrint,
+      ...(input.items || []).flatMap((i) => [i.label, i.detail]), ...(input.points || []), ...(input.footerLines || [])]
+      .filter(Boolean)
+      .join(' '),
+  );
+  const themeVars = themeVariables(theme, theme.colours(colour), scripts.stack);
+  const scriptCss = scripts.scripts.length
+    ? 'h1{line-height:1.28;letter-spacing:0}.price{line-height:1.15}.fit-line{padding:.03em 0}.card-label,.row,.sub,.foot-line,.cta{line-height:1.35}h1,.cta,.brand{text-transform:none}'
+    : '';
   // One unit = this canvas's share of its family's base canvas, so text and
   // spacing scale with whichever side is tighter.
   const u = Math.min(width / g.baseW, height / g.baseH);
@@ -351,8 +361,8 @@ export function buildPostLayout(input: PostLayoutInput): string {
     ? Math.round(px(g.photo.height) * 0.8)
     : colBottom;
 
-  return `<!doctype html><html><head><meta charset="utf-8"><style>
-${fontImport(theme.type)}
+  return `<!doctype html><html lang="${scripts.scripts.includes('Devanagari') ? 'hi' : 'en'}"><head><meta charset="utf-8"><style>
+${fontImport(theme.type, scripts.families)}
 :root{--u:${u}px;--k:1;${themeVars}}
 *{box-sizing:border-box}
 html,body{margin:0;padding:0;overflow:hidden}
@@ -396,6 +406,7 @@ footer{position:absolute;z-index:3;left:0;right:0;bottom:${footerBottom}px;heigh
 .fine{font-size:calc(var(--u)*16);opacity:.75;white-space:nowrap;align-self:${g.footerInRow ? 'center' : 'flex-end'};padding-bottom:${g.footerInRow ? 0 : px(22)}px}
 ${DECOR_CSS}
 ${themeOverrides(theme)}
+${scriptCss}
 </style></head><body><div class="stage ${family} theme-${theme.id}" data-spec="${esc(spec.id)}">
 ${decorationLayer(theme)}
 <div class="photo"></div>

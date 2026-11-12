@@ -11,6 +11,7 @@ import { ArtDirection, composeArtPrompt, pickTheme, PostTheme, ThemeId, THEMES }
 import { DesignerService, fetchInputImage } from './designer.service';
 import { campaignFromFolder, isBookableUrl, qrBox, qrPlatePage, qrSpaceWords, qrSvg, trackedUrl } from './qr';
 import * as sharp from 'sharp';
+import { scriptFonts } from './templates/tokens';
 
 type Artwork = { url: string; libraryId?: string; provider: string; cached: boolean; warnings: string[]; scene: string };
 
@@ -226,8 +227,13 @@ export class PostImageService {
 
     // Designer mode: the image model designs each size, text included; a size that
     // fails verification falls back to the layout engine below.
-    const designerOn = input.mode === 'designer' && (await this.designer.isAvailable());
-    if (input.mode === 'designer' && !designerOn) {
+    // Image models garble Indian scripts; the layout engine sets them exactly with Noto fonts.
+    const indianScript = scriptFonts(copyText(input)).scripts;
+    if (input.mode === 'designer' && indianScript.length) {
+      warnings.push(`The text is in ${indianScript.join(' and ')} script, which image models can't letter reliably, so the exact-text layout was used instead of designer mode.`);
+    }
+    const designerOn = input.mode === 'designer' && !indianScript.length && (await this.designer.isAvailable());
+    if (input.mode === 'designer' && !indianScript.length && !designerOn) {
       warnings.push('Designer mode needs OPENAI_API_KEY and ANTHROPIC_API_KEY; used the standard layout instead.');
     }
     let designerInputs: { logo?: Buffer; references?: Buffer[]; picture?: string; photo?: Buffer; photoScene?: string } | null = null;
