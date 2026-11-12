@@ -21,6 +21,7 @@
 import { CreativeSpec, familyOf, LayoutFamily, resolveSpec, SafeArea } from './creative-specs';
 import { PostTheme, ThemeColours, ThemeId, THEMES } from './post-themes';
 import { fontImport } from './templates/tokens';
+import { qrPlateHtml } from './qr';
 
 /** The original four formats; still accepted, now mapped to specs. */
 export type PostFormat = 'square' | 'portrait' | 'story' | 'landscape';
@@ -73,6 +74,8 @@ export interface PostLayoutInput extends PostCopy {
   logo?: 'show' | 'reserve' | 'none';
   /** Visual theme; clinical-clean when omitted. */
   theme?: ThemeId;
+  /** A "Scan to book" code (SVG from qr.ts), placed bottom-right above the footer. */
+  qrSvg?: string;
 }
 
 /** Theme colours and fonts as CSS custom properties. */
@@ -337,6 +340,12 @@ export function buildPostLayout(input: PostLayoutInput): string {
       ? // Runs to the canvas bottom, behind the footer and the app's reply zone, so nothing is left bare.
         `left:0;right:0;bottom:0;height:${px(g.photo.height)}px;-webkit-mask-image:linear-gradient(180deg,transparent 0,#000 22%);mask-image:linear-gradient(180deg,transparent 0,#000 22%)`
       : `top:0;right:0;bottom:${px(footerHeight)}px;width:${photoPanelWidth}px;-webkit-mask-image:linear-gradient(90deg,transparent 0,#000 24%);mask-image:linear-gradient(90deg,transparent 0,#000 24%)`;
+  // The booking code sits over the picture side, bottom-right, just above the footer.
+  const short = Math.min(width, height);
+  const qrMargin = Math.round(short * 0.04);
+  const qr = input.qrSvg
+    ? `<div class="qr" style="position:absolute;z-index:4;right:${safe.right + qrMargin}px;bottom:${Math.max(footerBottom + px(footerHeight), safe.bottom) + qrMargin}px">${qrPlateHtml(input.qrSvg, Math.round(Math.min(short * 0.2, height * 0.42)))}</div>`
+    : '';
   // Story text may run into the photo's faded top fifth, never down to the subject's face.
   const colMaxBottom = family === 'story' && g.photo.side === 'bottom'
     ? Math.round(px(g.photo.height) * 0.8)
@@ -394,6 +403,7 @@ ${decorationLayer(theme)}
 ${column}
 </div>
 ${footer}
+${qr}
 </div>
 <script>
 // Called by the renderer once fonts are ready: make everything fit.

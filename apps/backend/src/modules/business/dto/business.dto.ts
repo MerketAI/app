@@ -86,6 +86,11 @@ export class UpdateBusinessProfileDto {
   @IsOptional()
   contactPhone?: string;
 
+  @ApiPropertyOptional({ description: "The provider's public booking page, for booking links and QR codes on posts." })
+  @IsUrl({ protocols: ['http', 'https'], require_protocol: true, require_tld: false })
+  @IsOptional()
+  bookingUrl?: string;
+
   @ApiPropertyOptional()
   @IsOptional()
   socialLinks?: Record<string, string>;

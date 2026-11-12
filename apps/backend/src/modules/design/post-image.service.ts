@@ -9,6 +9,8 @@ import { buildPostLayout, PostCopy, PostFormat, PostLayoutInput } from './post-l
 import { CreativeSpec, CreativeSpecError, resolveSpec } from './creative-specs';
 import { ArtDirection, composeArtPrompt, pickTheme, PostTheme, ThemeId, THEMES } from './post-themes';
 import { DesignerService, fetchInputImage } from './designer.service';
+import { campaignFromFolder, isBookableUrl, qrBox, qrPlatePage, qrSpaceWords, qrSvg, trackedUrl } from './qr';
+import * as sharp from 'sharp';
 
 type Artwork = { url: string; libraryId?: string; provider: string; cached: boolean; warnings: string[]; scene: string };
 
@@ -40,6 +42,8 @@ export interface PostImageInput extends PostCopy {
   mode?: 'layout' | 'designer';
   /** Style references for designer mode (never copied). */
   referenceUrls?: string[];
+  /** Add a "Scan to book" QR code for the provider's booking page, tagged per size. */
+  bookingQr?: boolean;
   /** Where to file the post and its picture, e.g. "campaigns/eye-test-camp". */
   folder?: string;
   title?: string;
@@ -68,6 +72,8 @@ export interface RenderedSize {
     picture: string;
     pictureSource: 'new' | 'library';
     logo: 'placed' | 'space reserved' | 'none';
+    /** The tracked booking URL a "Scan to book" code on this size opens, if one was placed. */
+    qr?: string;
   };
 }
 
@@ -197,14 +203,18 @@ export class PostImageService {
 
     const profile = await this.prisma.userProfile.findUnique({
       where: { userId },
-      select: { businessName: true, industry: true, brandColors: true, logoUrl: true },
+      select: { businessName: true, industry: true, brandColors: true, logoUrl: true, bookingUrl: true },
     });
+    const bookingUrl = input.bookingQr && isBookableUrl(profile?.bookingUrl) ? profile!.bookingUrl! : null;
     const colour = brandColour(profile?.brandColors);
     const filing = { folder: input.folder, tags: input.tags };
 
     const warnings: string[] = [];
     if (placeholders.length) {
       warnings.push(`Left off the image because they were placeholders, not real details: ${placeholders.join(', ')}. Ask the provider for them.`);
+    }
+    if (input.bookingQr && !bookingUrl) {
+      warnings.push('No booking page is on file for this provider, so the "Scan to book" code was left off.');
     }
     if (input.logo === 'show' && !input.logoUrl && !profile?.logoUrl) {
       warnings.push('No logo is on file for this provider, so the logo space was left out.');
@@ -240,6 +250,11 @@ export class PostImageService {
     const sizes: RenderedSize[] = [];
     for (const spec of specs) {
       const title = `${input.title || input.headline.replace(/\n|\\n/g, ' ')}`;
+      // Each size gets its own tags, so a booking shows which placement it came from.
+      const qrUrl = bookingUrl
+        ? trackedUrl(bookingUrl, { source: spec.platform || 'quickcare', medium: 'qr', campaign: campaignFromFolder(input.folder) })
+        : undefined;
+      const code = qrUrl ? await qrSvg(qrUrl) : undefined;
       if (designerInputs) {
         try {
           const designed = await this.designer.design({
@@ -253,11 +268,14 @@ export class PostImageService {
             reserveLogo: !designerInputs.logo && input.logo === 'reserve',
             photo: designerInputs.photo,
             references: designerInputs.references,
+            qrSpace: code ? qrSpaceWords(spec) : undefined,
           });
           await this.subscriptions.consumeCredits(userId, 'DESIGN_GENERATE');
+          // The code is stamped after proofreading: an image model cannot draw a scannable one.
+          const finished = code ? await this.stampQr(designed.buffer, spec, code) : designed.buffer;
           const post = await this.library.store(
             userId,
-            { buffer: designed.buffer, mimeType: 'image/png', extension: 'png', name: `${spec.id}-designer-${title}` },
+            { buffer: finished, mimeType: 'image/png', extension: 'png', name: `${spec.id}-designer-${title}` },
             {
               kind: 'post',
               ...filing,
@@ -285,6 +303,7 @@ export class PostImageService {
               picture: designed.verification.imagery,
               pictureSource: designerInputs.photo ? 'library' : 'new',
               logo: designerInputs.logo ? 'placed' : !designerInputs.logo && input.logo === 'reserve' ? 'space reserved' : 'none',
+              ...(qrUrl ? { qr: qrUrl } : {}),
             },
           });
           continue;
@@ -304,6 +323,7 @@ export class PostImageService {
         colour,
         logoUrl: input.logoUrl || profile?.logoUrl || undefined,
         artworkUrl: artwork.url,
+        qrSvg: code,
       });
       const rendered = await this.renderer.renderToImage(html, spec.width, spec.height, 'png');
       if (rendered.renderer !== 'puppeteer') {
@@ -370,6 +390,7 @@ export class PostImageService {
               : input.logo === 'reserve'
                 ? 'space reserved'
                 : 'none',
+          ...(qrUrl ? { qr: qrUrl } : {}),
         },
       });
     }
@@ -392,6 +413,28 @@ export class PostImageService {
       height: first.height,
       warnings,
     };
+  }
+
+  /**
+   * Stamps a "Scan to book" plate onto a finished image, in the corner the designer
+   * kept clear. The plate is drawn by the renderer (real fonts) and given rounded
+   * corners here, since the page behind it renders white.
+   */
+  private async stampQr(image: Buffer, spec: CreativeSpec, svg: string): Promise<Buffer> {
+    const meta = await sharp(image).metadata();
+    const canvas = { width: meta.width || spec.width, height: meta.height || spec.height, safe: spec.safe };
+    const box = qrBox(canvas);
+    const plate = await this.renderer.renderToImage(qrPlatePage(svg, box.side), box.side, box.height, 'png');
+    if (plate.renderer !== 'puppeteer') throw new BadRequestException(plate.warning || 'The QR code could not be drawn.');
+    const radius = Math.round(box.side * 0.08);
+    const mask = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${box.side}" height="${box.height}"><rect width="100%" height="100%" rx="${radius}" ry="${radius}" fill="#fff"/></svg>`);
+    const rounded = await sharp(plate.buffer)
+      .resize(box.side, box.height)
+      .ensureAlpha()
+      .composite([{ input: mask, blend: 'dest-in' }])
+      .png()
+      .toBuffer();
+    return sharp(image).composite([{ input: rounded, left: box.left, top: box.top }]).png().toBuffer();
   }
 
   /** The layout engine's picture: a library pick, or generated from the art direction. */
