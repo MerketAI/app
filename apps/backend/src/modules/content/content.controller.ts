@@ -18,6 +18,7 @@ import {
   ApiBearerAuth,
 } from '@nestjs/swagger';
 import { ContentService } from './content.service';
+import { ContentCalendarService } from './content-calendar.service';
 import {
   GenerateContentDto,
   CreateContentDto,
@@ -33,7 +34,10 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 @UseGuards(HybridAuthGuard)
 @ApiBearerAuth()
 export class ContentController {
-  constructor(private contentService: ContentService) {}
+  constructor(
+    private contentService: ContentService,
+    private calendarService: ContentCalendarService,
+  ) {}
 
   @Post('generate')
   @ApiOperation({ summary: 'Generate AI-powered content' })
@@ -54,6 +58,16 @@ export class ContentController {
   @ApiOperation({ summary: 'Get draft contents' })
   async getDrafts(@CurrentUser('id') userId: string) {
     return this.contentService.getDrafts(userId);
+  }
+
+  @Get('calendar')
+  @ApiOperation({ summary: 'Health days and posts by date (from, to: YYYY-MM-DD, IST)' })
+  async getCalendar(
+    @CurrentUser('id') userId: string,
+    @Query('from') from: string,
+    @Query('to') to: string,
+  ) {
+    return this.calendarService.calendar(userId, from, to);
   }
 
   @Get('scheduled')

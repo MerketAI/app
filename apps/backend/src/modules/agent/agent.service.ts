@@ -13,6 +13,19 @@ import { PostImageService } from '../design/post-image.service';
 import { CREATIVE_SPECS, SPEC_IDS } from '../design/creative-specs';
 import { THEME_IDS, THEMES } from '../design/post-themes';
 import { bookingLinks } from '../design/qr';
+import { healthDaysBetween, isoDate, seasonalTopicsBetween } from '../content/health-calendar';
+import { istDate, plannedInstant } from '../content/content-calendar.service';
+
+/** A planned_for value: "" or missing means none; anything else must be a real date. */
+function plannedDate(value: unknown): string | null {
+  if (value === undefined || value === null || value === '') return null;
+  const date = isoDate(value);
+  if (!date) throw new Error('planned_for must be a date as YYYY-MM-DD, or "" for none.');
+  // A week or month that has already begun is planned from today, not its first day.
+  const today = istDate(new Date());
+  if (date < today) throw new Error(`planned_for ${date} is in the past; plan it for ${today} or later.`);
+  return date;
+}
 import { LIBRARY_ROOTS, LibraryService } from '../library/library.service';
 import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 import { AGENT_SYSTEM_PROMPT } from './agent.prompt';
@@ -218,8 +231,26 @@ const TOOLS: any[] = [
         body: { type: 'string', description: 'Full article text for a blog; empty for social posts.' },
         hashtags: { type: 'array', items: { type: 'string' } },
         mediaUrls: { type: 'array', items: { type: 'string' } },
+        planned_for: {
+          type: 'string',
+          description: 'The day this post is planned for on the content calendar, YYYY-MM-DD (India date), or "" for none. Planning does not publish or schedule.',
+        },
       },
-      required: ['platform', 'title', 'caption', 'body', 'hashtags', 'mediaUrls'],
+      required: ['platform', 'title', 'caption', 'body', 'hashtags', 'mediaUrls', 'planned_for'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'get_health_calendar',
+    description:
+      "Health awareness days (global and India's national days) and seasonal health topics between two dates, ranked for the provider's specialities. Use it to plan a week or month of posts, or to find a timely topic.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        from: { type: 'string', description: 'YYYY-MM-DD' },
+        to: { type: 'string', description: 'YYYY-MM-DD, at most 93 days after from' },
+      },
+      required: ['from', 'to'],
       additionalProperties: false,
     },
   },
@@ -251,6 +282,7 @@ const TOOLS: any[] = [
         body: { type: 'string' },
         hashtags: { type: 'array', items: { type: 'string' } },
         mediaUrls: { type: 'array', items: { type: 'string' }, description: 'Replaces the images, e.g. with a new create_post_image URL.' },
+        planned_for: { type: 'string', description: 'Move the draft to this calendar day (YYYY-MM-DD), or "" to take it off the calendar.' },
       },
       required: ['draftId'],
       additionalProperties: false,
@@ -511,7 +543,11 @@ export class AgentService {
       case 'get_business_profile': {
         const profile = await this.business.getBusinessProfile(userId);
         // Ready-made, tagged links so captions never carry a hand-built URL.
-        return { ...profile, bookingLinks: bookingLinks((profile as { bookingUrl?: string | null }).bookingUrl) };
+        // Today in India, so "this Sunday" and "next week" land on real dates (the
+        // system prompt stays date-free so it can be cached).
+        const now = new Date();
+        const today = `${istDate(now)} (${new Date(now.getTime() + 5.5 * 3600000).toLocaleDateString('en-IN', { weekday: 'long', timeZone: 'UTC' })})`;
+        return { ...profile, today, bookingLinks: bookingLinks((profile as { bookingUrl?: string | null }).bookingUrl) };
       }
 
       case 'list_connected_accounts':
@@ -580,6 +616,7 @@ export class AgentService {
         if (input.platform === 'instagram' && !(input.mediaUrls || []).length) {
           throw new Error('Instagram posts need an image. Attach one or call create_post_image first.');
         }
+        const plannedFor = plannedDate(input.planned_for);
         const draft = await this.prisma.content.create({
           data: {
             userId,
@@ -591,6 +628,7 @@ export class AgentService {
             hashtags: JSON.stringify(input.hashtags || []),
             mediaUrls: JSON.stringify(input.mediaUrls || []),
             aiMetadata: JSON.stringify({ source: 'marketing-assistant', platform: input.platform }),
+            ...(plannedFor ? { plannedFor: plannedInstant(plannedFor) } : {}),
           },
         });
         const summary = {
@@ -601,10 +639,18 @@ export class AgentService {
           body: input.body || '',
           hashtags: input.hashtags || [],
           mediaUrls: input.mediaUrls || [],
+          ...(plannedFor ? { plannedFor } : {}),
         };
         drafts.push(summary);
         await this.library.markUsed(userId, input.mediaUrls || []).catch(() => undefined);
-        return { saved: true, draftId: draft.id, note: 'Saved as a draft. The provider must publish it.' };
+        return {
+          saved: true,
+          draftId: draft.id,
+          ...(plannedFor ? { plannedFor } : {}),
+          note: plannedFor
+            ? `Saved as a draft on the calendar for ${plannedFor}. It is not scheduled: the provider schedules or publishes it.`
+            : 'Saved as a draft. The provider must publish it.',
+        };
       }
 
       case 'list_drafts': {
@@ -612,7 +658,7 @@ export class AgentService {
           where: { userId, status: 'DRAFT' },
           orderBy: { updatedAt: 'desc' },
           take: 10,
-          select: { id: true, title: true, caption: true, mediaUrls: true, aiMetadata: true, updatedAt: true },
+          select: { id: true, title: true, caption: true, mediaUrls: true, aiMetadata: true, updatedAt: true, plannedFor: true },
         });
         return rows.map((row) => ({
           draftId: row.id,
@@ -620,8 +666,22 @@ export class AgentService {
           title: row.title,
           caption: (row.caption || '').slice(0, 200),
           mediaUrls: this.parseList(row.mediaUrls),
+          plannedFor: row.plannedFor ? istDate(row.plannedFor) : null,
           updatedAt: row.updatedAt,
         }));
+      }
+
+      case 'get_health_calendar': {
+        const from = isoDate(input.from);
+        const to = isoDate(input.to);
+        if (!from || !to || to < from) throw new Error('Give from and to as YYYY-MM-DD, with to on or after from.');
+        if ((Date.parse(to) - Date.parse(from)) / 86400000 > 93) throw new Error('Ask for at most 93 days at a time.');
+        const profile = await this.prisma.userProfile.findUnique({ where: { userId }, select: { brandKeywords: true } });
+        return {
+          healthDays: healthDaysBetween(from, to, this.parseList(profile?.brandKeywords)),
+          seasons: seasonalTopicsBetween(from, to),
+          note: 'Days relevant to the provider come first on each date. Check festival dates and local news with web_search.',
+        };
       }
 
       case 'get_draft': {
@@ -640,7 +700,9 @@ export class AgentService {
       }
 
       case 'update_post_draft': {
-        const changes = ['title', 'caption', 'body', 'hashtags', 'mediaUrls'].filter((k) => input[k] !== undefined);
+        const changes = ['title', 'caption', 'body', 'hashtags', 'mediaUrls', 'planned_for'].filter((k) => input[k] !== undefined);
+        const replan = input.planned_for !== undefined;
+        const plannedFor = replan ? plannedDate(input.planned_for) : null;
         if (changes.length === 0) {
           // Without this, the model used an empty update as a way to read a draft.
           throw new Error('Nothing to change. To read a draft, use get_draft.');
@@ -665,6 +727,7 @@ export class AgentService {
             ...(input.body !== undefined ? { body: input.body || null } : {}),
             ...(input.hashtags !== undefined ? { hashtags: JSON.stringify(input.hashtags) } : {}),
             ...(input.mediaUrls !== undefined ? { mediaUrls: JSON.stringify(input.mediaUrls) } : {}),
+            ...(replan ? { plannedFor: plannedFor ? plannedInstant(plannedFor) : null } : {}),
           },
         });
         drafts.push({
@@ -675,6 +738,7 @@ export class AgentService {
           body: updated.body || '',
           hashtags: this.parseList(updated.hashtags),
           mediaUrls,
+          ...(updated.plannedFor ? { plannedFor: istDate(updated.plannedFor) } : {}),
           revised: true,
         });
         if (input.mediaUrls) await this.library.markUsed(userId, input.mediaUrls).catch(() => undefined);
@@ -765,6 +829,7 @@ export class AgentService {
       hashtags: this.parseList(row.hashtags),
       mediaUrls: this.parseList(row.mediaUrls),
       status: row.status,
+      ...(row.plannedFor ? { plannedFor: istDate(row.plannedFor) } : {}),
     }]));
 
     const messages = visible.map(({ role, text, draftIds, images }) => {
