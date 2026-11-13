@@ -42,6 +42,11 @@ interface PublishableContent {
   [key: string]: any;
 }
 
+/** A post's media is a video (a reel made by ReelService is an .mp4). */
+export function isVideoUrl(url: string | undefined): boolean {
+  return !!url && /\.(mp4|mov)(\?|$)/i.test(url);
+}
+
 @Injectable()
 export class PublishingService {
   constructor(
@@ -193,14 +198,15 @@ export class PublishingService {
         .filter(Boolean)
         .join('\n\n');
 
-      // Create container
+      // Create container: a photo, or a Reel when the media is a video.
+      const video = isVideoUrl(mediaUrl);
       const containerResponse = await fetch(
         `https://graph.facebook.com/v18.0/${igUserId}/media`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            image_url: mediaUrl,
+            ...(video ? { media_type: 'REELS', video_url: mediaUrl, share_to_feed: true } : { image_url: mediaUrl }),
             caption: caption.substring(0, 2200), // Instagram caption limit
             access_token: accessToken,
           }),
@@ -211,6 +217,14 @@ export class PublishingService {
 
       if (containerData.error) {
         return { success: false, error: containerData.error.message };
+      }
+
+      // Instagram processes a video before it can be published.
+      if (video) {
+        const ready = await this.waitForInstagramContainer(containerData.id, accessToken);
+        if (ready !== 'FINISHED') {
+          return { success: false, error: `Instagram could not process the video (${ready}). Try again in a few minutes.` };
+        }
       }
 
       // Step 2: Publish the container
@@ -248,6 +262,21 @@ export class PublishingService {
     }
   }
 
+  /**
+   * Polls an Instagram video container until it is ready (or fails), for up to
+   * about two minutes: FINISHED, ERROR, EXPIRED, or TIMEOUT if it never settles.
+   */
+  private async waitForInstagramContainer(id: string, accessToken: string): Promise<string> {
+    for (let i = 0; i < 24; i++) {
+      await new Promise((r) => setTimeout(r, 5000));
+      const res = await fetch(`https://graph.facebook.com/v18.0/${id}?fields=status_code&access_token=${accessToken}`);
+      const data = await res.json().catch(() => ({}));
+      const status = data?.status_code;
+      if (status === 'FINISHED' || status === 'ERROR' || status === 'EXPIRED') return status;
+    }
+    return 'TIMEOUT';
+  }
+
   async publishToFacebook(
     content: PublishableContent,
     connection: any,
@@ -272,7 +301,13 @@ export class PublishingService {
         access_token: accessToken,
       };
 
-      if (hasMedia) {
+      if (hasMedia && isVideoUrl(content.mediaUrls[0])) {
+        // A video post: Facebook fetches the file from its public URL.
+        endpoint = `https://graph-video.facebook.com/v18.0/${pageId}/videos`;
+        delete body.message;
+        body.description = message;
+        body.file_url = content.mediaUrls[0];
+      } else if (hasMedia) {
         // Post with photo
         endpoint = `https://graph.facebook.com/v18.0/${pageId}/photos`;
         body.url = content.mediaUrls[0];
@@ -291,7 +326,9 @@ export class PublishingService {
       }
 
       const postId = data.post_id || data.id;
-      const postUrl = `https://www.facebook.com/${postId.replace('_', '/posts/')}`;
+      const postUrl = String(postId).includes('_')
+        ? `https://www.facebook.com/${postId.replace('_', '/posts/')}`
+        : `https://www.facebook.com/${pageId}/videos/${postId}`;
 
       return {
         success: true,
