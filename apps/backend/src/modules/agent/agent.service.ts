@@ -771,6 +771,16 @@ export class AgentService {
     }
   }
 
+  /** Where a draft was published by the provider's own platform, e.g. "quickcare". */
+  private publishedOn(aiMetadata: unknown): string | undefined {
+    try {
+      const meta = typeof aiMetadata === 'string' ? JSON.parse(aiMetadata) : aiMetadata;
+      return (meta as any)?.publishedOn;
+    } catch {
+      return undefined;
+    }
+  }
+
   private async openConversation(userId: string, id: string | undefined, firstMessage: string) {
     if (id) {
       const found = await this.prisma.agentConversation.findFirst({ where: { id, userId } });
@@ -830,6 +840,9 @@ export class AgentService {
       mediaUrls: this.parseList(row.mediaUrls),
       status: row.status,
       ...(row.plannedFor ? { plannedFor: istDate(row.plannedFor) } : {}),
+      // Where a published post lives, and on what (e.g. "quickcare" for the provider's own blog).
+      ...(row.platformPostUrl ? { postUrl: row.platformPostUrl } : {}),
+      ...(this.publishedOn(row.aiMetadata) ? { publishedOn: this.publishedOn(row.aiMetadata) } : {}),
     }]));
 
     const messages = visible.map(({ role, text, draftIds, images }) => {
