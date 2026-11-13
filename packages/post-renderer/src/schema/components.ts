@@ -77,6 +77,10 @@ export const ALLOWED_STYLE_PROPS = [
   'align',
   'justify',
   'wrap',
+  // Lets a template override a component's own alignment - CTAButton pins
+  // itself to the start of its zone, which is right in a left-aligned panel
+  // and wrong in a centred card.
+  'alignSelf',
   'columns',
   'variant',
 

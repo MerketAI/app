@@ -1,9 +1,8 @@
 import * as React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { ComposeInput, composePost } from './compose';
-import { fontImport } from './theme';
+import { postDocumentStyles } from './document-styles';
 import { AUTOFIT_SCRIPT } from '../autofit/autofit-script';
-import { CANVAS_FORMATS } from '../schema/types';
 
 export interface RenderHtmlOptions extends ComposeInput {
   /**
@@ -16,31 +15,22 @@ export interface RenderHtmlOptions extends ComposeInput {
 /**
  * Renders the composition to a complete HTML document for Puppeteer.
  *
- * The preview and the export share `composePost`, so there is exactly one
- * implementation of the layout. This function only adds what a standalone
- * document needs that a React app already has: a reset, the webfont import and
- * the auto-fit hook.
+ * The preview and the export share `composePost` and `postDocumentStyles`, so
+ * there is exactly one implementation of the layout and one stylesheet. This
+ * function only adds what a standalone document needs that a React app already
+ * has: the document shell and the auto-fit hook.
  */
 export function renderPostToHtml(options: RenderHtmlOptions): string {
-  const canvas = CANVAS_FORMATS[options.format];
   const markup = renderToStaticMarkup(composePost(options));
-
-  const autofit = options.includeAutofit === false ? '' : `<script>${AUTOFIT_SCRIPT}</script>`;
+  const autofit =
+    options.includeAutofit === false ? '' : `<script>${AUTOFIT_SCRIPT}</script>`;
 
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <style>
-  ${fontImport(options.type)}
-  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
-  html, body { margin: 0; padding: 0; background: #ffffff; }
-  body { width: ${canvas.width}px; height: ${canvas.height}px; overflow: hidden; }
-  img { display: block; }
-  ul, ol { list-style: none; }
-  /* Inline icons carry their own intrinsic width and height; scale them to the
-     box the layout gave them. */
-  [data-icon] > svg { width: 100%; height: 100%; display: block; }
+  ${postDocumentStyles(options)}
 </style>
 </head>
 <body>
@@ -52,8 +42,11 @@ ${autofit}
 
 /**
  * Renders just the composition markup, for embedding in the Next.js preview.
- * No document shell, no script: the preview app owns both.
+ * No document shell and no script: the preview mounts this inside the styles
+ * from `postDocumentStyles` and runs the auto-fit pass itself.
  */
 export function renderPostToMarkup(options: ComposeInput): string {
   return renderToStaticMarkup(composePost(options));
 }
+
+export { postDocumentStyles };

@@ -137,13 +137,25 @@ function render(
 }
 
 describe('ported JSON templates', () => {
-  it('loads both built-ins with no rejections', () => {
+  it('loads every built-in with no rejections', () => {
     const { templates, rejected } = loadTemplates();
     expect(rejected).toEqual([]);
     expect(templates.map((t) => t.id).sort()).toEqual([
       'clinic-profile-01',
+      'event-notice-01',
       'photo-hero-01',
     ]);
+  });
+
+  // The catalogue has to offer something for a brief with no photograph, or
+  // the Art Director is left with only the A4 flyer for a social post.
+  it('offers a social layout that needs no photograph', () => {
+    const social = builtInTemplates().filter(
+      (t) =>
+        t.formats.some((f) => f.startsWith('instagram')) &&
+        !t.slots.heroImage?.required,
+    );
+    expect(social.map((t) => t.id)).toContain('event-notice-01');
   });
 
   it('each built-in passes validation with no warnings either', () => {

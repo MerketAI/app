@@ -172,8 +172,21 @@ describe('renderPostToHtml', () => {
     const { html } = render();
     expect(html).toContain('data-fit="headline"');
     expect(html).toContain('data-fit-min="40"');
-    expect(html).toContain('data-fit-max="96"');
     expect(html).toContain('data-fit-lines="3"');
+    // The ceiling is the size the zone was designed at (88px), not the
+    // largest the slot would allow (96px): auto-fit shrinks to fit, it never
+    // grows text past the design.
+    expect(html).toContain('data-fit-max="88"');
+  });
+
+  it('clamps the designed size to the ceiling the slot declares', () => {
+    const oversized = template();
+    const copy = oversized.zones.find((z) => z.id === 'copy')!;
+    const headline = copy.children!.find((c) => c.slot === 'headline')!;
+    headline.style = { ...headline.style, fontSize: 140 };
+
+    const { html } = render(oversized);
+    expect(html).toContain('data-fit-max="96"');
   });
 
   it('includes the auto-fit hook for export', () => {

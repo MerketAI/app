@@ -1,0 +1,564 @@
+{
+  "schemaVersion": "1.0.0",
+  "id": "event-notice-01",
+  "templateVersion": "1.2.0",
+  "title": "Event notice",
+  "family": "medical-editorial",
+  "status": "active",
+  "formats": [
+    "instagram_square",
+    "instagram_portrait"
+  ],
+  "referenceFormat": "instagram_square",
+  "description": "Social announcement for a camp, awareness day, seasonal campaign or offer. An accent masthead carries the occasion, a panel holds the date, time and venue, and the practitioner is named above the call to action. Needs no photograph, which is the point: it is the layout available when there is nothing to photograph.",
+  "campaignTypes": [
+    "event",
+    "health_camp",
+    "awareness",
+    "offer",
+    "seasonal",
+    "announcement"
+  ],
+  "theme": {
+    "mood": "clinical",
+    "background": "surface"
+  },
+  "capabilities": {
+    "maxServices": 3,
+    "supportsCutout": false,
+    "supportsPhoto": false,
+    "supportsTimings": true,
+    "supportsBadges": false
+  },
+  "slots": {
+    "brandName": {
+      "kind": "text",
+      "source": "profile",
+      "profileField": "clinicName",
+      "required": true,
+      "maxChars": 46,
+      "maxLines": 2,
+      "minFontSize": 19,
+      "maxFontSize": 28,
+      "overflow": "shrink"
+    },
+    "eyebrow": {
+      "kind": "text",
+      "source": "campaign",
+      "required": false,
+      "maxChars": 34,
+      "maxLines": 1,
+      "minFontSize": 22,
+      "maxFontSize": 34,
+      "overflow": "shrink",
+      "fallback": "hide",
+      "description": "What the post announces, in a few words: 'Free dental camp', 'World Oral Health Day'. Shown as a pill on the masthead."
+    },
+    "headline": {
+      "kind": "richtext",
+      "source": "campaign",
+      "required": true,
+      "maxChars": 72,
+      "maxLines": 3,
+      "minFontSize": 34,
+      "maxFontSize": 56,
+      "overflow": "shrink",
+      "description": "The message. Emphasise the phrase that carries it."
+    },
+    "subheadline": {
+      "kind": "text",
+      "source": "campaign",
+      "required": false,
+      "maxChars": 120,
+      "maxLines": 2,
+      "minFontSize": 19,
+      "maxFontSize": 25,
+      "overflow": "shrink",
+      "fallback": "hide"
+    },
+    "details": {
+      "kind": "keyvalue",
+      "source": "campaign",
+      "required": false,
+      "maxItems": 3,
+      "minFontSize": 19,
+      "maxFontSize": 27,
+      "overflow": "shrink",
+      "fallback": "hide",
+      "description": "Date, time and venue. A camp post is useless without them, and the venue is often not the practice address."
+    },
+    "highlights": {
+      "kind": "list",
+      "source": "campaign",
+      "required": false,
+      "maxItems": 3,
+      "maxItemChars": 24,
+      "minFontSize": 16,
+      "maxFontSize": 22,
+      "overflow": "shrink",
+      "fallback": "hide",
+      "description": "Three short reassurances at most: 'Free screening', 'All ages'."
+    },
+    "cta": {
+      "kind": "text",
+      "source": "campaign",
+      "required": false,
+      "maxChars": 34,
+      "maxLines": 1,
+      "minFontSize": 23,
+      "maxFontSize": 32,
+      "overflow": "shrink",
+      "fallback": "hide"
+    },
+    "doctorName": {
+      "kind": "text",
+      "source": "profile",
+      "profileField": "doctorName",
+      "required": false,
+      "maxChars": 46,
+      "maxLines": 1,
+      "minFontSize": 18,
+      "maxFontSize": 24,
+      "overflow": "shrink",
+      "fallback": "hide"
+    },
+    "qualifications": {
+      "kind": "text",
+      "source": "profile",
+      "profileField": "qualifications",
+      "required": false,
+      "maxChars": 72,
+      "maxLines": 1,
+      "minFontSize": 14,
+      "maxFontSize": 18,
+      "overflow": "shrink",
+      "fallback": "hide"
+    },
+    "phone": {
+      "kind": "text",
+      "source": "profile",
+      "profileField": "phone",
+      "required": false,
+      "maxChars": 24,
+      "maxLines": 1,
+      "overflow": "truncate",
+      "fallback": "hide"
+    },
+    "website": {
+      "kind": "text",
+      "source": "profile",
+      "profileField": "website",
+      "required": false,
+      "maxChars": 46,
+      "maxLines": 1,
+      "overflow": "truncate",
+      "fallback": "hide"
+    },
+    "bookingUrl": {
+      "kind": "text",
+      "source": "profile",
+      "profileField": "bookingUrl",
+      "required": false,
+      "maxChars": 46,
+      "maxLines": 1,
+      "overflow": "truncate",
+      "fallback": "hide"
+    }
+  },
+  "zones": [
+    {
+      "id": "masthead",
+      "layer": 1,
+      "frame": {
+        "x": 0,
+        "y": 0,
+        "width": 1080,
+        "height": 330
+      },
+      "frameByFormat": {
+        "instagram_portrait": {
+          "x": 0,
+          "y": 0,
+          "width": 1080,
+          "height": 380
+        }
+      },
+      "children": [
+        {
+          "component": "Shape",
+          "shape": "arc",
+          "style": {
+            "color": "accent"
+          }
+        }
+      ]
+    },
+    {
+      "id": "mastheadDots",
+      "layer": 2,
+      "frame": {
+        "x": 0,
+        "y": 0,
+        "width": 1080,
+        "height": 250
+      },
+      "frameByFormat": {
+        "instagram_portrait": {
+          "x": 0,
+          "y": 0,
+          "width": 1080,
+          "height": 290
+        }
+      },
+      "children": [
+        {
+          "component": "Shape",
+          "shape": "dots",
+          "style": {
+            "color": "onAccent",
+            "opacity": 0.16
+          }
+        }
+      ]
+    },
+    {
+      "id": "brand",
+      "layer": 3,
+      "frame": {
+        "x": 64,
+        "y": 56,
+        "width": 700,
+        "height": 54
+      },
+      "frameByFormat": {
+        "instagram_portrait": {
+          "x": 64,
+          "y": 66,
+          "width": 700,
+          "height": 56
+        }
+      },
+      "style": {
+        "background": "accent"
+      },
+      "children": [
+        {
+          "component": "Text",
+          "slot": "brandName",
+          "style": {
+            "fontFamily": "display",
+            "fontSize": 28,
+            "fontWeight": 700,
+            "textTransform": "uppercase",
+            "letterSpacing": 3,
+            "lineHeight": 1.15,
+            "color": "onAccent"
+          }
+        }
+      ]
+    },
+    {
+      "id": "eyebrow",
+      "layer": 3,
+      "frame": {
+        "x": 64,
+        "y": 128,
+        "width": 820,
+        "height": 104
+      },
+      "frameByFormat": {
+        "instagram_portrait": {
+          "x": 64,
+          "y": 148,
+          "width": 820,
+          "height": 110
+        }
+      },
+      "style": {
+        "background": "accent",
+        "justify": "center"
+      },
+      "children": [
+        {
+          "component": "Badge",
+          "slot": "eyebrow",
+          "style": {
+            "fontFamily": "display",
+            "fontSize": 34,
+            "fontWeight": 800,
+            "textTransform": "uppercase",
+            "letterSpacing": 1,
+            "background": "surface",
+            "color": "accent",
+            "paddingTop": 14,
+            "paddingBottom": 14,
+            "paddingLeft": 30,
+            "paddingRight": 30
+          }
+        }
+      ]
+    },
+    {
+      "id": "headline",
+      "layer": 2,
+      "stack": "main",
+      "stackGap": 16,
+      "frame": {
+        "x": 64,
+        "y": 336,
+        "width": 900,
+        "height": 178
+      },
+      "frameByFormat": {
+        "instagram_portrait": {
+          "x": 64,
+          "y": 396,
+          "width": 900,
+          "height": 232
+        }
+      },
+      "children": [
+        {
+          "component": "RichText",
+          "slot": "headline",
+          "style": {
+            "fontFamily": "display",
+            "fontSize": 60,
+            "fontWeight": 800,
+            "lineHeight": 1.06,
+            "textTransform": "uppercase",
+            "color": "ink"
+          }
+        }
+      ],
+      "stackAlign": "center"
+    },
+    {
+      "id": "subheadline",
+      "layer": 2,
+      "stack": "main",
+      "stackGap": 20,
+      "frame": {
+        "x": 64,
+        "y": 530,
+        "width": 860,
+        "height": 76
+      },
+      "frameByFormat": {
+        "instagram_portrait": {
+          "x": 64,
+          "y": 646,
+          "width": 860,
+          "height": 86
+        }
+      },
+      "children": [
+        {
+          "component": "Text",
+          "slot": "subheadline",
+          "style": {
+            "fontSize": 25,
+            "lineHeight": 1.45,
+            "color": "onSurfaceMuted"
+          }
+        }
+      ]
+    },
+    {
+      "id": "details",
+      "layer": 2,
+      "stack": "main",
+      "stackGap": 18,
+      "frame": {
+        "x": 64,
+        "y": 626,
+        "width": 1000,
+        "height": 172
+      },
+      "frameByFormat": {
+        "instagram_portrait": {
+          "x": 64,
+          "y": 754,
+          "width": 1000,
+          "height": 196
+        }
+      },
+      "style": {
+        "background": "accent",
+        "borderRadius": 28,
+        "paddingTop": 22,
+        "paddingBottom": 22,
+        "paddingLeft": 34,
+        "paddingRight": 34,
+        "justify": "center"
+      },
+      "children": [
+        {
+          "component": "KeyValue",
+          "slot": "details",
+          "style": {
+            "fontSize": 27,
+            "lineHeight": 1.55,
+            "color": "onAccent",
+            "gap": 4
+          }
+        }
+      ]
+    },
+    {
+      "id": "highlights",
+      "layer": 2,
+      "stack": "main",
+      "stackGap": 16,
+      "frame": {
+        "x": 64,
+        "y": 816,
+        "width": 1000,
+        "height": 34
+      },
+      "frameByFormat": {
+        "instagram_portrait": {
+          "x": 64,
+          "y": 970,
+          "width": 1000,
+          "height": 38
+        }
+      },
+      "children": [
+        {
+          "component": "List",
+          "slot": "highlights",
+          "style": {
+            "fontSize": 22,
+            "fontWeight": 700,
+            "lineHeight": 1.3,
+            "color": "onSurface",
+            "direction": "row",
+            "gap": 34
+          }
+        }
+      ]
+    },
+    {
+      "id": "presenter",
+      "layer": 2,
+      "stack": "main",
+      "stackGap": 14,
+      "frame": {
+        "x": 64,
+        "y": 866,
+        "width": 1000,
+        "height": 54
+      },
+      "frameByFormat": {
+        "instagram_portrait": {
+          "x": 64,
+          "y": 1026,
+          "width": 1000,
+          "height": 60
+        }
+      },
+      "children": [
+        {
+          "component": "Text",
+          "slot": "doctorName",
+          "style": {
+            "fontFamily": "display",
+            "fontSize": 24,
+            "fontWeight": 700,
+            "lineHeight": 1.25,
+            "color": "ink"
+          }
+        },
+        {
+          "component": "Text",
+          "slot": "qualifications",
+          "style": {
+            "fontSize": 18,
+            "lineHeight": 1.3,
+            "color": "onSurfaceMuted"
+          }
+        }
+      ]
+    },
+    {
+      "id": "cta",
+      "layer": 2,
+      "stack": "main",
+      "stackGap": 0,
+      "frame": {
+        "x": 64,
+        "y": 934,
+        "width": 1000,
+        "height": 72
+      },
+      "frameByFormat": {
+        "instagram_portrait": {
+          "x": 64,
+          "y": 1102,
+          "width": 1000,
+          "height": 78
+        }
+      },
+      "children": [
+        {
+          "component": "CTAButton",
+          "slot": "cta",
+          "style": {
+            "fontFamily": "display",
+            "fontSize": 32,
+            "fontWeight": 800,
+            "textTransform": "uppercase",
+            "background": "accent",
+            "color": "onAccent",
+            "borderRadius": 18,
+            "paddingTop": 16,
+            "paddingBottom": 16,
+            "paddingLeft": 44,
+            "paddingRight": 44,
+            "lineHeight": 1.2
+          }
+        }
+      ]
+    },
+    {
+      "id": "contact",
+      "layer": 3,
+      "frame": {
+        "x": 0,
+        "y": 1006,
+        "width": 1080,
+        "height": 74
+      },
+      "frameByFormat": {
+        "instagram_portrait": {
+          "x": 0,
+          "y": 1266,
+          "width": 1080,
+          "height": 84
+        }
+      },
+      "style": {
+        "background": "ink",
+        "paddingTop": 22,
+        "paddingBottom": 22,
+        "paddingLeft": 64,
+        "paddingRight": 64,
+        "justify": "center"
+      },
+      "children": [
+        {
+          "component": "ContactBar",
+          "style": {
+            "fontSize": 22,
+            "lineHeight": 1.4,
+            "color": "onInk",
+            "direction": "row",
+            "gap": 32,
+            "justify": "center"
+          }
+        }
+      ]
+    }
+  ]
+}

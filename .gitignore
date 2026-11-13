@@ -98,3 +98,7 @@ creds.txt
 
 # LOCAL_UPLOADS=true development storage (apps/backend)
 local-uploads/
+
+# post-renderer: browser compile for the parity test, and render artefacts
+dist-browser/
+test-output/

@@ -43,11 +43,14 @@ export type { Palette, TypePair, TypeMood } from './render/theme';
 export { composePost } from './render/compose';
 export type { ComposeInput } from './render/compose';
 export { renderPostToHtml, renderPostToMarkup } from './render/render-to-html';
+export { postDocumentStyles } from './render/document-styles';
 export type { RenderHtmlOptions } from './render/render-to-html';
 export { shapeDataUri, maskPathFor } from './render/shape-bridge';
+export { iconPaintPlan, emphasisOn } from './render/surface-colors';
+export type { IconPaintPlan } from './render/surface-colors';
 
 // Autofit
-export { AUTOFIT_SCRIPT } from './autofit/autofit-script';
+export { AUTOFIT_SCRIPT, runAutofit } from './autofit/autofit-script';
 export type { AutofitReport } from './autofit/autofit-script';
 
 // Templates

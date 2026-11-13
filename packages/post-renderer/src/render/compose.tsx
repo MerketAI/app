@@ -36,6 +36,7 @@ import {
 } from '../schema/types';
 import { shapeDataUri, maskPathFor } from './shape-bridge';
 import { isContactField } from '../schema/protected-fields';
+import { emphasisOn } from './surface-colors';
 
 export interface ComposeInput {
   template: TemplateDefinition;
@@ -121,8 +122,17 @@ function renderZone(
 ): React.ReactElement {
   const frame = frameFor(zone, input.format, input.template);
 
+  // The surface a mark lands on decides its colour, and zones routinely invert
+  // the page - a white card on an accent field, an ink footer on a white page.
+  const zoneSurface =
+    resolveColor(zone.style?.background, input.palette) ??
+    resolveColor(input.template.theme.background ?? 'surface', input.palette) ??
+    input.palette.surface;
+
   const children = zone.children
-    .map((node, i) => renderNode(node, input, ctx, `${zone.id}-${i}`, frame))
+    .map((node, i) =>
+      renderNode(node, input, ctx, `${zone.id}-${i}`, frame, zoneSurface),
+    )
     .filter(Boolean) as React.ReactNode[];
 
   // A zone that rendered nothing is dropped entirely - including one with a
@@ -136,6 +146,12 @@ function renderZone(
     <div
       key={zone.id}
       data-zone={zone.id}
+      {...(zone.stack ? { 'data-stack': zone.stack } : {})}
+      {...(zone.stackGap !== undefined
+        ? { 'data-stack-gap': String(zone.stackGap) }
+        : {})}
+      {...(zone.stackAlign ? { 'data-stack-align': zone.stackAlign } : {})}
+      {...stackEnvelopeAttrs(zone, input)}
       style={{
         position: 'absolute',
         left: frame.x,
@@ -155,12 +171,45 @@ function renderZone(
   );
 }
 
+/**
+ * The vertical space a stack was authored to occupy.
+ *
+ * It has to come from the template, not from the DOM: a zone with no content
+ * is never rendered, so measuring the envelope from what is present collapses
+ * it to the surviving members. A post with one line of copy would then centre
+ * that line inside its own box rather than inside the space the layout set
+ * aside for the whole stack, which is no centring at all.
+ */
+function stackEnvelopeAttrs(
+  zone: Zone,
+  input: ComposeInput,
+): Record<string, string> {
+  if (!zone.stack) return {};
+
+  let top = Infinity;
+  let bottom = -Infinity;
+  for (const other of input.template.zones) {
+    if (other.stack !== zone.stack) continue;
+    const frame = frameFor(other, input.format, input.template);
+    top = Math.min(top, frame.y);
+    bottom = Math.max(bottom, frame.y + frame.height);
+  }
+
+  if (!Number.isFinite(top) || !Number.isFinite(bottom)) return {};
+  return {
+    'data-stack-top': String(top),
+    'data-stack-bottom': String(bottom),
+  };
+}
+
 function renderNode(
   node: LayoutNode,
   input: ComposeInput,
   ctx: RenderContext,
   key: string,
   frame?: Frame,
+  /** Resolved background behind this node, inherited unless it sets its own. */
+  surface?: string,
 ): React.ReactNode | null {
   const { template, content, palette, seed } = input;
   const spec: SlotSpec | undefined = node.slot ? template.slots[node.slot] : undefined;
@@ -171,9 +220,13 @@ function renderNode(
   if (node.slot && !value) return null;
 
   const css = toCss(node.style, ctx);
-  const fit = fitAttrsFor(node.slot, spec);
+  const fit = fitAttrsFor(node.slot, spec, node.style);
+  const nodeSurface =
+    resolveColor(node.style?.background, palette) ?? surface ?? palette.surface;
   const children = (node.children || [])
-    .map((child, i) => renderNode(child, input, ctx, `${key}-${i}`, frame))
+    .map((child, i) =>
+      renderNode(child, input, ctx, `${key}-${i}`, frame, nodeSurface),
+    )
     .filter(Boolean) as React.ReactNode[];
 
   switch (node.component) {
@@ -208,7 +261,7 @@ function renderNode(
           <RichText
             key={key}
             runs={value.runs}
-            emphasisColor={palette.onAccentEmphasis}
+            emphasisColor={emphasisOn(nodeSurface, palette)}
             style={css}
             fit={fit}
           />
@@ -388,13 +441,45 @@ function plainText(value: SlotValue | undefined, literal?: string): string | nul
  *
  * Only `shrink` participates: the other modes are resolved before render, by
  * truncating, hiding, or switching the zone to its alternate arrangement.
+ *
+ * The upper bound is the size the template *designed*, not the largest the
+ * slot permits. Taking it from `spec.maxFontSize` alone was wrong twice over:
+ * a zone styled at 46px rendered at 53px, because the fit pass treated the
+ * slot's 58px ceiling as a target and grew the text past the design; and
+ * editing the style's `fontSize` had no effect at all, which is a poor trap to
+ * leave in the one layer a designer is meant to edit. The slot's min and max
+ * are safety limits on that designed size, not a replacement for it.
  */
-function fitAttrsFor(slot: string | undefined, spec: SlotSpec | undefined): FitAttrs | undefined {
+function fitAttrsFor(
+  slot: string | undefined,
+  spec: SlotSpec | undefined,
+  style?: Record<string, unknown>,
+): FitAttrs | undefined {
   if (!slot || !spec || spec.overflow !== 'shrink') return undefined;
+
+  const designed = Number(style?.fontSize);
+  const ceiling = spec.maxFontSize;
+  const max =
+    Number.isFinite(designed) && designed > 0
+      ? ceiling
+        ? Math.min(designed, ceiling)
+        : designed
+      : ceiling;
+
+  // With no bound at all there is nothing to shrink towards, and the fit pass
+  // would fall back to whatever size the element currently happens to be. That
+  // is harmless for a one-shot export and wrong in the live preview, where it
+  // would compound across edits. A shrinkable slot with no declared size is a
+  // template bug; leaving it unmarked makes it visible as overflow instead of
+  // quietly drifting.
+  if (!max) return undefined;
+  const min =
+    spec.minFontSize && max ? Math.min(spec.minFontSize, max) : spec.minFontSize;
+
   return {
     'data-fit': slot,
-    'data-fit-min': spec.minFontSize,
-    'data-fit-max': spec.maxFontSize,
+    'data-fit-min': min,
+    'data-fit-max': max,
     'data-fit-lines': spec.maxLines,
   };
 }

@@ -11,11 +11,21 @@ import { RendererService } from './renderer.service';
 import { PostImageService } from './post-image.service';
 import { DesignerService } from './designer.service';
 import { CreativeSpecsController } from './creative-specs.controller';
+import { PostDesignController } from './post-design.controller';
+import { PostDesignService } from './post-design.service';
+import { ArtDirectorService } from './art-director.service';
 
 @Module({
   imports: [PrismaModule, CredentialsModule, SubscriptionsModule, UploadModule, AssetsModule, LibraryModule],
-  controllers: [DesignController, CreativeSpecsController],
-  providers: [DesignService, RendererService, PostImageService, DesignerService],
-  exports: [DesignService, PostImageService],
+  controllers: [DesignController, CreativeSpecsController, PostDesignController],
+  providers: [
+    DesignService,
+    RendererService,
+    PostImageService,
+    DesignerService,
+    ArtDirectorService,
+    PostDesignService,
+  ],
+  exports: [DesignService, PostImageService, PostDesignService],
 })
 export class DesignModule {}

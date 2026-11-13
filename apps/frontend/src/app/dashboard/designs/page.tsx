@@ -11,6 +11,7 @@ import {
   Edit,
   Search,
   LayoutGrid,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -109,12 +110,20 @@ export default function DesignsPage() {
           <h1 className="text-3xl font-bold">Designs</h1>
           <p className="text-gray-500 mt-1">Create and manage marketing designs and flyers</p>
         </div>
-        <Link href="/dashboard/designs/create">
-          <Button>
-            <Plus className="w-4 h-4 mr-2" />
-            Create Design
-          </Button>
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link href="/dashboard/designs/studio">
+            <Button variant="outline">
+              <SlidersHorizontal className="w-4 h-4 mr-2" />
+              Template studio
+            </Button>
+          </Link>
+          <Link href="/dashboard/designs/create">
+            <Button>
+              <Plus className="w-4 h-4 mr-2" />
+              Create Design
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {/* Filters */}

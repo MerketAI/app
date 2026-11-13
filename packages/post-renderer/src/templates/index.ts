@@ -1,5 +1,6 @@
 import clinicProfile01 from './clinic-profile-01.json';
 import photoHero01 from './photo-hero-01.json';
+import eventNotice01 from './event-notice-01.json';
 import { TemplateDefinition } from '../schema/types';
 import { validateTemplate } from '../schema/validate-template';
 
@@ -11,7 +12,7 @@ import { validateTemplate } from '../schema/validate-template';
  * the same code path. Anything that only works because it was written in
  * TypeScript would be a gap the schema is hiding.
  */
-const BUILT_IN_JSON: unknown[] = [clinicProfile01, photoHero01];
+const BUILT_IN_JSON: unknown[] = [clinicProfile01, photoHero01, eventNotice01];
 
 export interface TemplateLoadResult {
   templates: TemplateDefinition[];

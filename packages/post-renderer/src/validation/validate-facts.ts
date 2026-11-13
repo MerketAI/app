@@ -120,6 +120,16 @@ export function validateAndInjectFacts(
     resolved[slotName] = supplied;
   }
 
+  // The slot specs declare capacity - maxChars, maxItems, maxItemChars - and
+  // until now nothing checked it, so a 67-character practice name went into a
+  // slot declaring 48 and only surfaced as a clipped zone after a render. A
+  // protected fact is never shortened to fit, so this reports rather than
+  // rewrites: the caller can choose a roomier template, or the operator can
+  // set a shorter display name.
+  for (const [slotName, value] of Object.entries(resolved)) {
+    reportCapacity(slotName, template.slots[slotName], value, issues);
+  }
+
   // Values for slots the template does not declare are dropped, not rendered.
   for (const slotName of Object.keys(content.values)) {
     if (!template.slots[slotName]) {
@@ -195,6 +205,72 @@ function resolveProfileSlot(
   }
 
   return { value: { kind: 'text', value: verified } };
+}
+
+/**
+ * Compares a resolved value against the capacity its slot declares.
+ *
+ * Warnings, not errors: the auto-fit pass may still place the content, and
+ * refusing a render that would have been fine is worse than flagging it. What
+ * matters is that the overrun is visible before the pixels are paid for.
+ */
+function reportCapacity(
+  slotName: string,
+  spec: SlotSpec | undefined,
+  value: SlotValue,
+  issues: FactIssue[],
+): void {
+  if (!spec) return;
+
+  const tooLong = (text: string, limit: number | undefined, what: string) => {
+    if (!limit || text.length <= limit) return;
+    issues.push({
+      slot: slotName,
+      field: spec.profileField,
+      message: `${what} is ${text.length} characters; this slot declares room for ${limit}. It will be shrunk to fit, and may not fit at all.`,
+      severity: 'warning',
+    });
+  };
+
+  switch (value.kind) {
+    case 'text':
+      tooLong(value.value, spec.maxChars, 'Value');
+      break;
+
+    case 'richtext':
+      tooLong(
+        value.runs.map((r) => r.text).join(' '),
+        spec.maxChars,
+        'Headline',
+      );
+      break;
+
+    case 'list':
+      if (spec.maxItems && value.items.length > spec.maxItems) {
+        issues.push({
+          slot: slotName,
+          message: `${value.items.length} items supplied; this slot shows ${spec.maxItems}. The extras are dropped.`,
+          severity: 'warning',
+        });
+      }
+      for (const item of value.items) {
+        tooLong(item.label, spec.maxItemChars, `List item "${item.label}"`);
+      }
+      break;
+
+    case 'keyvalue':
+      if (spec.maxItems && value.items.length > spec.maxItems) {
+        issues.push({
+          slot: slotName,
+          message: `${value.items.length} rows supplied; this slot shows ${spec.maxItems}. The extras are dropped.`,
+          severity: 'warning',
+        });
+      }
+      break;
+
+    default:
+      break;
+  }
 }
 
 function kindMatches(spec: SlotSpec, value: SlotValue): boolean {
