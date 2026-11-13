@@ -139,6 +139,87 @@ the API cannot be used to enumerate valid keys.
 
 Google Drive uses the `drive.file` scope, so only files the subscriber picks are reachable: `GET /api/v1/platforms/:id/drive-token` returns a token for Google's Picker, and `POST /api/v1/platforms/:id/drive-import` with `{ fileId }` copies the file to public storage and returns its URL.
 
+## Designed posts and flyers
+
+`/api/v1/post-designs` builds a post or flyer from a versioned template. An
+"Art Director" model chooses a layout and writes the copy; it never produces
+markup, and it is structurally incapable of supplying a contact detail.
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/api/v1/post-designs/templates` | The catalogue, with every slot and whether a model may write it. |
+| `POST` | `/api/v1/post-designs/plan` | A plan for a brief, without rendering it. 3 credits. |
+| `POST` | `/api/v1/post-designs/render` | The full pipeline, returning a stored image. 5 credits, plus 3 if we planned it. |
+
+### What the model may and may not write
+
+Every slot declares a `source`. Only `campaign` slots are authored by the
+model. Anything sourced from `profile` — practitioner name, qualifications,
+registration number, specialty, practice name, phone, email, website, address,
+booking URL — is **discarded from the model's output without being read** and
+injected afterwards from the verified profile. The model may decide *whether* a
+verified field appears, via `visibleSlots`; it may not decide what it says.
+
+This is not a prompt instruction, it is a filter. A generated phone number that
+merely looks plausible gets dialled by patients.
+
+The `corrections[]` in every response lists what was stripped and why, so a
+model repeatedly reaching for a protected field is visible to you rather than
+silent.
+
+### Supplying what we do not store
+
+Jasper holds the practice name, phone, website and address. It does not hold
+the practitioner's name, qualifications, registration number or specialty, so
+send them in `profile` when your layout shows them. They are trusted because
+*you* supplied them, not because a model produced them.
+
+```http
+POST /api/v1/post-designs/render
+X-App-Key: ...
+X-App-Secret: ...
+X-App-Uid: 23455
+
+{
+  "campaignType": "awareness",
+  "occasion": "World Oral Health Day",
+  "language": "en",
+  "profile": {
+    "doctorName": "Dr. Kavita Rao",
+    "qualifications": "BDS, MDS (Prosthodontics)"
+  },
+  "brandColor": "#0d9488"
+}
+```
+
+Three layouts ship today: an A4 practice profile, a photo-led social post, and
+an event notice for camps, awareness days and offers. `GET /templates` is the
+authority; it also reports `requiresPhoto` per layout.
+
+Add `photoUrl` for photo-led layouts. Without one they are not offered to the
+director at all — they declare the photograph required, so proposing one would
+guarantee a failed render. The URL must be a public host; it is copied into our
+own storage and cropped to the slot before use.
+
+### Reading the response
+
+- `url` — the stored image. Pass it as `mediaUrls` when creating content.
+- `snapshotId` / an immutable snapshot recorded against the design — the exact
+  template version, profile version, resolved copy and asset ids. A design is
+  reproducible only because this is kept; templates get edited and profiles get
+  corrected.
+- `fit` — per zone, whether the content fitted and at what scale. A zone at
+  `scale: 0` fitted only because it ran out of room to shrink, which is worth
+  looking at before publishing.
+- `factIssues` — warnings such as copy longer than the slot declares.
+- `renderer` — `placeholder` means no browser was available on the server and
+  nothing publishable was produced. You are not charged for those.
+
+### Iterating
+
+Call `/plan`, show it to your user, then send the approved plan back as
+`direction` on `/render`. You are not charged for the model a second time.
+
 ## Marketing assistant
 
 | Method | Path | Purpose |

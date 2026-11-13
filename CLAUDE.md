@@ -238,6 +238,85 @@ identical brief reuses the stored image and is **not** charged again. Use
 Pass the resulting URL as `businessContext.heroImageUrl` to composite it into a
 flyer header.
 
+### Post renderer (`packages/post-renderer`)
+Three templates ship: `clinic-profile-01` (A4 practice profile),
+`photo-hero-01` (photo-led social post) and `event-notice-01` (camps, awareness
+days, offers). The third exists because the first two left a hole the Art
+Director walked straight into - with no photograph supplied, its only option
+was an A4 flyer, which is not a social post. A test asserts that gap stays
+closed.
+
+The template system for generated posts and flyers, shared by the live preview
+and the Puppeteer export so there is exactly one implementation of a layout.
+Templates are **versioned JSON validated against an allow-list** before use -
+no raw HTML, no `url()`, no arbitrary CSS - and protected facts (doctor name,
+clinic name, phone, email, website, address, registration number) are injected
+from the verified profile *after* generation. A model may choose whether such a
+field is shown; it never supplies the value.
+
+`npm test` is the fast suite. `npm run test:browser` launches Chrome and checks
+the things only a browser can answer: that nothing clips across a stress matrix
+(long addresses, long names, sparse profiles, Hindi and English), that the
+preview and export are pixel-identical, and that identical inputs render
+identically. Two cases are deliberately unfittable controls - without them a
+report that always said "fits" would pass everything else. Re-record baselines
+with `JASPER_UPDATE_BASELINES=1`. See the package README.
+
+The live preview is the **Template studio** (`/dashboard/designs/studio`). It
+mounts the shared `composePost` inside an iframe with `postDocumentStyles` and
+runs the same fit script the export inlines, so what it shows is what the PNG
+will be - the package's parity test asserts the two are pixel-identical. The
+iframe is load-bearing: those styles are document-scoped, and the fit pass
+measures a document.
+
+Auto-fit shrinks; it never grows text past the size the template was designed
+at. A zone reported at `scale=0` fitted only because it ran out of room to
+shrink - that is a design problem, not a pass. Colours for icons and headline
+emphasis come from the surface a mark lands on (`iconPaintPlan`, `emphasisOn`),
+never from the template's general mood - that is how accent marks end up
+invisible on an accent field, and warm emphasis unreadable on a white page.
+
+### Art Director (`design/art-director.service.ts`, `/post-designs`)
+The model that fills the templates above. It directs the design system rather
+than drawing: it picks a layout from the catalogue and writes the copy, and
+produces no HTML, CSS, colour, coordinate or font size.
+
+`art-direction.ts` is the trust boundary and is deliberately pure, so it can be
+tested exhaustively without an API key, a database or a browser. A value for
+any slot whose `source` is not `campaign` is **discarded without being read** -
+it does not matter whether the model's phone number happens to be right, it is
+not the model's to supply. Invented icon concepts are dropped (the label
+stands alone), over-long lists are trimmed, over-long copy is kept because the
+fit pass can shrink it, and everything dropped is reported in `corrections[]`.
+A plan that cannot proceed gets exactly one corrected retry.
+
+Templates whose required *asset* slots cannot be satisfied are filtered out
+before the model is called - offering a photo-led layout with no photograph
+guarantees a wasted call and then a failed render.
+
+`POST /post-designs/plan` returns the plan without rendering, so a caller can
+iterate cheaply and send it back as `direction` to `/render` without paying for
+the model twice.
+
+### Stack repacking
+Absolute zones are what give these layouts their composition, and also why an
+omitted section leaves a hole: nothing reflows into the gap. Zones sharing a
+`stack` name are repacked against their **measured content** after the fit pass
+- not `scrollHeight`, which never reports less than the box. Repacking only
+ever moves a zone *up*, so content that could not be shrunk can never push the
+next zone down into a pinned footer.
+
+A stack's envelope comes from the template, never from the DOM: a zone with no
+content is not rendered at all, so measuring from what survived collapses the
+envelope to those members and `stackAlign: "center"` would centre a lone
+headline inside its own box rather than in the space the layout set aside.
+Centring suits a stack pinned between a masthead and a footer; a document's
+masthead belongs at the top of the page, so the A4 profile stays `start`.
+
+Note what this means for the tests: the overflow suite detects too much content
+and is blind to too little. `a4-sparse` passed every assertion while two-thirds
+empty.
+
 ### Layout auto-fit
 Fixed-size pages plus tenant-supplied copy means overflow is inevitable.
 Templates expose `window.__fitDesign()`, which `renderer.service.ts` calls
