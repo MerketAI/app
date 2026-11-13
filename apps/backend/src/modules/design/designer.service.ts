@@ -132,7 +132,12 @@ const MAX_INPUT_BYTES = 8 * 1024 * 1024;
  * Fetches a provider-supplied image (logo, reference) for the image model:
  * https only, never a private or local address, bounded size, re-encoded as PNG.
  */
-export async function fetchInputImage(url: string): Promise<Buffer> {
+export async function fetchInputImage(
+  url: string,
+  limits: { maxBytes?: number; maxSide?: number } = {},
+): Promise<Buffer> {
+  const maxBytes = limits.maxBytes ?? MAX_INPUT_BYTES;
+  const maxSide = limits.maxSide ?? 1536;
   let parsed: URL;
   try {
     parsed = new URL(url);
@@ -153,8 +158,8 @@ export async function fetchInputImage(url: string): Promise<Buffer> {
   if (!response.ok) throw new BadRequestException(`Could not fetch that image (HTTP ${response.status}).`);
   if (!/^image\//.test(response.headers.get('content-type') || '')) throw new BadRequestException('That link is not an image.');
   const bytes = Buffer.from(await response.arrayBuffer());
-  if (bytes.length > MAX_INPUT_BYTES) throw new BadRequestException('That image is larger than 8 MB.');
-  return sharp(bytes).rotate().resize({ width: 1536, height: 1536, fit: 'inside', withoutEnlargement: true }).png().toBuffer();
+  if (bytes.length > maxBytes) throw new BadRequestException(`That image is larger than ${Math.round(maxBytes / 1048576)} MB.`);
+  return sharp(bytes).rotate().resize({ width: maxSide, height: maxSide, fit: 'inside', withoutEnlargement: true }).png().toBuffer();
 }
 
 @Injectable()

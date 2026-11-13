@@ -10,6 +10,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { BusinessService } from '../business/business.service';
 import { CredentialsService } from '../credentials/credentials.service';
 import { PostImageService } from '../design/post-image.service';
+import { ReelService } from '../design/reel.service';
 import { CREATIVE_SPECS, SPEC_IDS } from '../design/creative-specs';
 import { THEME_IDS, THEMES } from '../design/post-themes';
 import { bookingLinks } from '../design/qr';
@@ -34,6 +35,12 @@ const MODEL = 'claude-opus-5-5';
 const MAX_STEPS = 10;
 
 /** Each platform's draft type; publishing dispatches on the connection, credits on this. */
+/** Content types for posts whose media is a video. */
+const VIDEO_TYPES: Record<string, string> = {
+  instagram: 'INSTAGRAM_REEL',
+  facebook: 'FACEBOOK_VIDEO',
+};
+
 const DRAFT_TYPES: Record<string, string> = {
   instagram: 'INSTAGRAM_IMAGE',
   facebook: 'FACEBOOK_IMAGE',
@@ -241,6 +248,22 @@ const TOOLS: any[] = [
     },
   },
   {
+    name: 'create_reel',
+    description:
+      'Make a short vertical video (9:16, for Instagram Reels, Facebook, stories and WhatsApp status) from 1-6 finished images: a slow push-in on each, crossfades between them, no voice or music. Make the images first with create_post_image at the instagram-story spec (with booking_qr if booking is the goal), then pass their URLs here in the order they should play. Returns the video URL to use in save_post_draft mediaUrls.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        image_urls: { type: 'array', items: { type: 'string' }, minItems: 1, maxItems: 6, description: 'Finished images, in playing order.' },
+        seconds_per_image: { type: 'number', description: 'How long each image shows, 2-8 (default 4). Aim for 8-20 seconds in all.' },
+        folder: { type: 'string', description: 'Library folder, same as its images, e.g. "campaigns/eye-camp-nov-2026".' },
+        title: { type: 'string' },
+      },
+      required: ['image_urls'],
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'get_health_calendar',
     description:
       "Health awareness days (global and India's national days) and seasonal health topics between two dates, ranked for the provider's specialities. Use it to plan a week or month of posts, or to find a timely topic.",
@@ -324,8 +347,18 @@ export function imagesFrom(result: any): MadeImage[] {
   const sizes = Array.isArray(result?.sizes) ? result.sizes : result?.url ? [result] : [];
   return sizes
     .filter((s: any) => typeof s?.url === 'string' && s.url)
-    .map((s: any) => ({ url: s.url, label: s.label || s.spec || 'Image', width: s.width, height: s.height, spec: s.spec }));
+    .map((s: any) => ({
+      url: s.url,
+      // A reel (create_reel) carries its length.
+      label: s.label || s.spec || (typeof s.seconds === 'number' ? `Reel · ${s.seconds} s` : 'Image'),
+      width: s.width,
+      height: s.height,
+      spec: s.spec,
+    }));
 }
+
+/** Tools whose results are media to show as cards: post images and reels. */
+const MEDIA_TOOLS = new Set(['create_post_image', 'create_reel']);
 
 /** Images not already on one of the drafts' cards, each once. */
 export function unclaimedImages(images: MadeImage[], drafts: Array<{ mediaUrls?: unknown }>): MadeImage[] {
@@ -372,7 +405,7 @@ export function conversationView(stored: Array<{ role: string; content: string }
       if (DRAFT_TOOLS.has(tool)) {
         const result = parseResult(b);
         if (result && result.draftId) pendingDrafts.push(result.draftId);
-      } else if (tool === 'create_post_image') {
+      } else if (MEDIA_TOOLS.has(tool)) {
         pendingImages.push(...imagesFrom(parseResult(b)));
       }
     }
@@ -404,6 +437,7 @@ export class AgentService {
     private postImages: PostImageService,
     private subscriptions: SubscriptionsService,
     private library: LibraryService,
+    private reels?: ReelService,
   ) {}
 
   private async client(): Promise<Anthropic> {
@@ -495,7 +529,7 @@ export class AgentService {
       for (const call of calls) {
         try {
           const output = await this.runTool(userId, call, drafts);
-          if (call.name === 'create_post_image') made.push(...imagesFrom(output));
+          if (MEDIA_TOOLS.has(call.name)) made.push(...imagesFrom(output));
           results.push({ type: 'tool_result', tool_use_id: call.id, content: JSON.stringify(output) });
         } catch (error) {
           results.push({
@@ -611,7 +645,9 @@ export class AgentService {
         });
 
       case 'save_post_draft': {
-        const type = DRAFT_TYPES[input.platform];
+        // A video makes the post a Reel or a Facebook video.
+        const isVideo = (input.mediaUrls || []).some((u: string) => /\.mp4(\?|$)/i.test(String(u)));
+        const type = isVideo ? VIDEO_TYPES[input.platform] : DRAFT_TYPES[input.platform];
         if (!type) throw new Error(`Unknown platform: ${input.platform}`);
         if (input.platform === 'instagram' && !(input.mediaUrls || []).length) {
           throw new Error('Instagram posts need an image. Attach one or call create_post_image first.');
@@ -669,6 +705,16 @@ export class AgentService {
           plannedFor: row.plannedFor ? istDate(row.plannedFor) : null,
           updatedAt: row.updatedAt,
         }));
+      }
+
+      case 'create_reel': {
+        if (!this.reels) throw new Error('Video making is not available here.');
+        return this.reels.create(userId, {
+          imageUrls: input.image_urls,
+          secondsPerImage: input.seconds_per_image,
+          folder: input.folder,
+          title: input.title,
+        });
       }
 
       case 'get_health_calendar': {

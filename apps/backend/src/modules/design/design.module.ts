@@ -10,6 +10,7 @@ import { DesignService } from './design.service';
 import { RendererService } from './renderer.service';
 import { PostImageService } from './post-image.service';
 import { DesignerService } from './designer.service';
+import { ReelService } from './reel.service';
 import { CreativeSpecsController } from './creative-specs.controller';
 
 @Module({
