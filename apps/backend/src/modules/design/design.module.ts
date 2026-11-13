@@ -26,7 +26,8 @@ import { ArtDirectorService } from './art-director.service';
     DesignerService,
     ArtDirectorService,
     PostDesignService,
+    ReelService,
   ],
-  exports: [DesignService, PostImageService, PostDesignService],
+  exports: [DesignService, PostImageService, PostDesignService, ReelService],
 })
 export class DesignModule {}
