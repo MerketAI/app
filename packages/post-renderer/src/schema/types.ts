@@ -151,6 +151,31 @@ export interface Zone {
   style?: StyleMap;
   /** Clip children to the zone. Needed for masked media. */
   clip?: boolean;
+
+  /**
+   * Zones sharing a stack name are repacked vertically against their measured
+   * content, after the fit pass.
+   *
+   * Absolute positioning is what gives these layouts their composition, and it
+   * is also why an omitted section leaves a hole: nothing reflows into the gap.
+   * An Art Director that correctly decides a post needs no consulting hours
+   * would otherwise produce a flyer with a void in the middle of it. Members of
+   * a stack close up instead.
+   *
+   * Repacking only ever moves a zone *up*. Content that could not be shrunk to
+   * fit must not be allowed to push the next zone down into a pinned footer.
+   */
+  stack?: string;
+  /** Space to leave below this zone when its stack is repacked. */
+  stackGap?: number;
+  /**
+   * How the repacked stack sits in the space it was given. Read from the first
+   * member. 'center' lets a short stack sit in the middle rather than clinging
+   * to the top, which is the difference between a sparse post and a sheet of
+   * white with a sentence on it.
+   */
+  stackAlign?: 'start' | 'center';
+
   children: LayoutNode[];
   /**
    * Arrangement used when a slot in this zone overflows with

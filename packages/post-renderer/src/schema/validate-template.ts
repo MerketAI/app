@@ -277,6 +277,24 @@ function validateZone(
     }
   }
 
+  if (zone.stack !== undefined && typeof zone.stack !== 'string') {
+    error(`${path}.stack`, 'stack must be a string naming the stack to repack with.');
+  }
+  if (
+    zone.stackGap !== undefined &&
+    (typeof zone.stackGap !== 'number' || !Number.isFinite(zone.stackGap) || zone.stackGap < 0)
+  ) {
+    error(`${path}.stackGap`, 'stackGap must be a non-negative number.');
+  }
+
+  if (
+    zone.stackAlign !== undefined &&
+    zone.stackAlign !== 'start' &&
+    zone.stackAlign !== 'center'
+  ) {
+    error(`${path}.stackAlign`, 'stackAlign must be "start" or "center".');
+  }
+
   if (zone.style) validateStyle(zone.style, `${path}.style`, ctx);
 
   const children = Array.isArray(zone.children) ? zone.children : [];

@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1.0.0",
   "id": "photo-hero-01",
-  "templateVersion": "1.1.0",
+  "templateVersion": "1.2.1",
   "title": "Photo hero",
   "family": "medical-photo",
   "status": "active",
@@ -324,8 +324,9 @@
         "paddingBottom": 22,
         "paddingLeft": 36,
         "paddingRight": 36,
-        "gap": 8,
-        "justify": "center"
+        "gap": 14,
+        "justify": "center",
+        "align": "center"
       },
       "children": [
         {
@@ -341,7 +342,8 @@
             "paddingTop": 0,
             "paddingBottom": 0,
             "paddingLeft": 0,
-            "paddingRight": 0
+            "paddingRight": 0,
+            "alignSelf": "center"
           }
         },
         {
@@ -350,17 +352,39 @@
             "fontSize": 22,
             "lineHeight": 1.4,
             "color": "onSurface",
-            "direction": "column",
-            "gap": 8
+            "direction": "row",
+            "gap": 26,
+            "justify": "center"
           }
-        },
+        }
+      ]
+    },
+    {
+      "id": "credit",
+      "layer": 2,
+      "frame": {
+        "x": 40,
+        "y": 1054,
+        "width": 1000,
+        "height": 22
+      },
+      "frameByFormat": {
+        "instagram_portrait": {
+          "x": 40,
+          "y": 1294,
+          "width": 1000,
+          "height": 22
+        }
+      },
+      "children": [
         {
           "component": "Text",
           "slot": "photoCredit",
           "style": {
-            "fontSize": 14,
-            "color": "onSurfaceMuted",
-            "paddingTop": 6
+            "fontSize": 13,
+            "color": "onAccent",
+            "opacity": 0.62,
+            "textAlign": "right"
           }
         }
       ]

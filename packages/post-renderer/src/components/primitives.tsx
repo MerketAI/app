@@ -84,6 +84,9 @@ export function toCss(
 
   if (style.direction) css.flexDirection = style.direction === 'row' ? 'row' : 'column';
   if (style.align) css.alignItems = style.align as React.CSSProperties['alignItems'];
+  if (style.alignSelf) {
+    css.alignSelf = style.alignSelf as React.CSSProperties['alignSelf'];
+  }
   if (style.justify) {
     css.justifyContent = style.justify as React.CSSProperties['justifyContent'];
   }

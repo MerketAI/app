@@ -1,0 +1,8 @@
+# Compiled output
+dist/
+# Browser compile, built only by the preview/export parity test
+dist-browser/
+# Rendered PNGs from the last browser-test run
+test-output/
+# Cached Google Fonts, so the visual suite is deterministic and offline
+test-cache/

@@ -1,15 +1,24 @@
 {
   "schemaVersion": "1.0.0",
   "id": "clinic-profile-01",
-  "templateVersion": "1.0.0",
+  "templateVersion": "1.2.0",
   "title": "Practice profile",
   "family": "medical-editorial",
   "status": "active",
   "description": "Dense practice profile: headline, photo, service grid, consulting hours, trust badges and a contact bar. Suits a clinic that wants one asset answering what they do, when they are open and how to reach them.",
-  "campaignTypes": ["clinic_profile", "services", "awareness"],
-  "formats": ["a4_portrait"],
+  "campaignTypes": [
+    "clinic_profile",
+    "services",
+    "awareness"
+  ],
+  "formats": [
+    "a4_portrait"
+  ],
   "referenceFormat": "a4_portrait",
-  "theme": { "mood": "clinical", "background": "surface" },
+  "theme": {
+    "mood": "clinical",
+    "background": "surface"
+  },
   "capabilities": {
     "maxServices": 8,
     "supportsCutout": false,
@@ -23,8 +32,8 @@
       "source": "profile",
       "profileField": "clinicName",
       "required": true,
-      "maxChars": 48,
-      "maxLines": 1,
+      "maxChars": 72,
+      "maxLines": 2,
       "minFontSize": 24,
       "maxFontSize": 44,
       "overflow": "shrink",
@@ -154,15 +163,31 @@
     {
       "id": "wash",
       "layer": 0,
-      "frame": { "x": 0, "y": 0, "width": 1240, "height": 760 },
+      "frame": {
+        "x": 0,
+        "y": 0,
+        "width": 1240,
+        "height": 760
+      },
       "children": [
-        { "component": "Shape", "shape": "wash", "style": { "color": "accent" } }
+        {
+          "component": "Shape",
+          "shape": "wash",
+          "style": {
+            "color": "accent"
+          }
+        }
       ]
     },
     {
       "id": "brand",
       "layer": 2,
-      "frame": { "x": 74, "y": 52, "width": 740, "height": 90 },
+      "frame": {
+        "x": 74,
+        "y": 52,
+        "width": 740,
+        "height": 90
+      },
       "children": [
         {
           "component": "Text",
@@ -177,14 +202,24 @@
         },
         {
           "component": "Divider",
-          "style": { "background": "accent", "borderRadius": 4 }
+          "style": {
+            "background": "accent",
+            "borderRadius": 4
+          }
         }
-      ]
+      ],
+      "stack": "main",
+      "stackGap": 30
     },
     {
       "id": "headline",
       "layer": 2,
-      "frame": { "x": 74, "y": 168, "width": 700, "height": 320 },
+      "frame": {
+        "x": 74,
+        "y": 168,
+        "width": 700,
+        "height": 320
+      },
       "children": [
         {
           "component": "RichText",
@@ -208,21 +243,37 @@
             "paddingTop": 22
           }
         }
-      ]
+      ],
+      "stack": "main",
+      "stackGap": 42
     },
     {
       "id": "heroArt",
       "layer": 1,
-      "frame": { "x": 830, "y": 168, "width": 340, "height": 340 },
+      "frame": {
+        "x": 830,
+        "y": 168,
+        "width": 340,
+        "height": 340
+      },
       "clip": true,
       "children": [
-        { "component": "Image", "slot": "heroImage", "mask": "arcBottom" }
+        {
+          "component": "Image",
+          "slot": "heroImage",
+          "mask": "arcBottom"
+        }
       ]
     },
     {
       "id": "servicesTitle",
       "layer": 2,
-      "frame": { "x": 74, "y": 530, "width": 700, "height": 70 },
+      "frame": {
+        "x": 74,
+        "y": 530,
+        "width": 700,
+        "height": 70
+      },
       "children": [
         {
           "component": "Badge",
@@ -240,12 +291,19 @@
             "paddingRight": 30
           }
         }
-      ]
+      ],
+      "stack": "main",
+      "stackGap": 18
     },
     {
       "id": "services",
       "layer": 2,
-      "frame": { "x": 74, "y": 618, "width": 1092, "height": 300 },
+      "frame": {
+        "x": 74,
+        "y": 618,
+        "width": 1092,
+        "height": 300
+      },
       "clip": true,
       "children": [
         {
@@ -259,12 +317,19 @@
             "color": "onSurface"
           }
         }
-      ]
+      ],
+      "stack": "main",
+      "stackGap": 22
     },
     {
       "id": "timings",
       "layer": 2,
-      "frame": { "x": 74, "y": 940, "width": 1092, "height": 180 },
+      "frame": {
+        "x": 74,
+        "y": 940,
+        "width": 1092,
+        "height": 180
+      },
       "clip": true,
       "style": {
         "background": "ink",
@@ -275,14 +340,26 @@
         {
           "component": "KeyValue",
           "slot": "timings",
-          "style": { "fontSize": 26, "lineHeight": 1.5, "color": "onInk", "gap": 8 }
+          "style": {
+            "fontSize": 26,
+            "lineHeight": 1.5,
+            "color": "onInk",
+            "gap": 8
+          }
         }
-      ]
+      ],
+      "stack": "main",
+      "stackGap": 30
     },
     {
       "id": "badges",
       "layer": 2,
-      "frame": { "x": 74, "y": 1150, "width": 1092, "height": 150 },
+      "frame": {
+        "x": 74,
+        "y": 1150,
+        "width": 1092,
+        "height": 150
+      },
       "clip": true,
       "children": [
         {
@@ -299,12 +376,19 @@
             "padding": 18
           }
         }
-      ]
+      ],
+      "stack": "main",
+      "stackGap": 30
     },
     {
       "id": "cta",
       "layer": 2,
-      "frame": { "x": 74, "y": 1330, "width": 1092, "height": 110 },
+      "frame": {
+        "x": 74,
+        "y": 1330,
+        "width": 1092,
+        "height": 110
+      },
       "children": [
         {
           "component": "CTAButton",
@@ -319,12 +403,19 @@
             "textAlign": "center"
           }
         }
-      ]
+      ],
+      "stack": "main",
+      "stackGap": 38
     },
     {
       "id": "contact",
       "layer": 3,
-      "frame": { "x": 0, "y": 1478, "width": 1240, "height": 276 },
+      "frame": {
+        "x": 0,
+        "y": 1478,
+        "width": 1240,
+        "height": 276
+      },
       "clip": true,
       "style": {
         "background": "ink",
