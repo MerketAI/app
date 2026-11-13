@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { HealthDay, healthDaysBetween, isoDate, SeasonalTopic, seasonalTopicsBetween } from './health-calendar';
 
@@ -43,6 +43,34 @@ export interface ContentCalendar {
 @Injectable()
 export class ContentCalendarService {
   constructor(private prisma: PrismaService) {}
+
+  /**
+   * A draft the provider's own platform published (a blog on their Quick Care page):
+   * recorded as published so the calendar and the chat show it, with its link.
+   */
+  async markPublishedElsewhere(userId: string, contentId: string, url: string, platform: string) {
+    const content = await this.prisma.content.findFirst({ where: { id: contentId, userId } });
+    if (!content) throw new NotFoundException('Content not found');
+    if (['PUBLISHED', 'PUBLISHING', 'SCHEDULED'].includes(content.status)) {
+      throw new BadRequestException('That post is already scheduled or published.');
+    }
+    let meta: Record<string, unknown> = {};
+    try {
+      meta = JSON.parse(content.aiMetadata || '{}');
+    } catch {
+      /* keep empty */
+    }
+    return this.prisma.content.update({
+      where: { id: content.id },
+      data: {
+        status: 'PUBLISHED',
+        publishedAt: new Date(),
+        platformPostUrl: url,
+        aiMetadata: JSON.stringify({ ...meta, publishedOn: platform }),
+      },
+      select: { id: true, status: true, publishedAt: true, platformPostUrl: true },
+    });
+  }
 
   async calendar(userId: string, fromRaw: unknown, toRaw: unknown): Promise<ContentCalendar> {
     const from = isoDate(fromRaw);

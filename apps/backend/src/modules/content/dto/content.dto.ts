@@ -7,6 +7,8 @@ import {
   IsBoolean,
   IsDateString,
   IsUUID,
+  IsUrl,
+  MaxLength,
 } from 'class-validator';
 const ContentType = {
   INSTAGRAM_IMAGE: 'INSTAGRAM_IMAGE',
@@ -151,6 +153,18 @@ export class UpdateContentDto {
   @IsOptional()
   @IsEnum(ContentStatus)
   status?: ContentStatus;
+}
+
+/** A post the provider's own platform published (e.g. a blog on their Quick Care page). */
+export class PublishedElsewhereDto {
+  @ApiProperty({ description: 'Where the post now lives.' })
+  @IsUrl({ protocols: ['http', 'https'], require_protocol: true, require_tld: false })
+  url: string;
+
+  @ApiProperty({ description: 'Where it was published, e.g. "quickcare".' })
+  @IsString()
+  @MaxLength(40)
+  platform: string;
 }
 
 export class ScheduleContentDto {

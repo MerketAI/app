@@ -25,6 +25,7 @@ import {
   UpdateContentDto,
   ScheduleContentDto,
   ContentFilterDto,
+  PublishedElsewhereDto,
 } from './dto/content.dto';
 import { HybridAuthGuard } from '../partner/guards/hybrid-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -111,6 +112,16 @@ export class ContentController {
     @Body() dto: UpdateContentDto,
   ) {
     return this.contentService.update(userId, contentId, dto);
+  }
+
+  @Post(':id/published-elsewhere')
+  @ApiOperation({ summary: "Mark a draft published by the provider's own platform (e.g. their Quick Care page)" })
+  async publishedElsewhere(
+    @CurrentUser('id') userId: string,
+    @Param('id') contentId: string,
+    @Body() dto: PublishedElsewhereDto,
+  ) {
+    return this.calendarService.markPublishedElsewhere(userId, contentId, dto.url, dto.platform);
   }
 
   @Post(':id/schedule')
