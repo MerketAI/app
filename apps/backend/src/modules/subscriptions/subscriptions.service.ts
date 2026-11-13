@@ -43,6 +43,11 @@ export const CREDIT_COSTS: Record<string, number> = {
   EMAIL_SEQUENCE: 20,
   DESIGN_GENERATE: 10,
   DESIGN_RENDER: 5,
+  // The Art Director writes copy and picks a layout; no image model is called,
+  // so it costs a fraction of ARTWORK_GENERATE. Planning is charged separately
+  // from rendering because a caller is expected to iterate on the plan.
+  POST_DIRECT: 3,
+  POST_RENDER: 5,
   AGENT_MESSAGE: 1,
   // Artwork calls a paid image model, so it costs more than a layout.
   ARTWORK_GENERATE: 25,

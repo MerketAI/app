@@ -21,12 +21,15 @@
     "db:studio": "prisma studio",
     "partner:create": "ts-node prisma/create-partner-app.ts",
     "db:migrate:status": "prisma migrate status",
-    "assets:verify": "python scripts/verify-icons.py"
+    "assets:verify": "python scripts/verify-icons.py",
+    "prebuild": "npm run build --prefix ../../packages/post-renderer",
+    "predev": "npm run build --prefix ../../packages/post-renderer"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.72.1",
     "@aws-sdk/client-s3": "^3.490.0",
     "@aws-sdk/s3-request-presigner": "^3.490.0",
+    "@jasper/post-renderer": "^0.1.0",
     "@nestjs/cli": "^10.3.0",
     "@nestjs/common": "^10.3.0",
     "@nestjs/config": "^3.1.1",
@@ -96,7 +99,7 @@
     "rootDir": "src",
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {
-      "^.+\\.(t|j)s$": "ts-jest"
+      "^.+\\.ts$": "ts-jest"
     },
     "collectCoverageFrom": [
       "**/*.(t|j)s"

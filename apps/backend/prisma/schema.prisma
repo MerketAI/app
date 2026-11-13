@@ -1026,6 +1026,14 @@ model Design {
   outputUrl       String?  @map("output_url")
   thumbnailUrl    String?  @map("thumbnail_url")
   creditsConsumed Int      @default(0) @map("credits_consumed")
+
+  /// Immutable record of exactly what produced this render: template id and
+  /// version, profile version, resolved copy and asset ids. JSON-encoded.
+  /// Without it a published design cannot be reproduced or audited after the
+  /// template or the profile has moved on.
+  renderSnapshot  String?  @map("render_snapshot")
+  /// Stable hash of the snapshot: identical inputs give the same id.
+  snapshotId      String?  @map("snapshot_id")
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 
