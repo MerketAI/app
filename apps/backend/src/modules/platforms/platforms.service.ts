@@ -37,6 +37,24 @@ interface MetaAccountInfo {
   access_token?: string;
 }
 
+/**
+ * What connecting found about a Facebook Page's Instagram: an account came with it,
+ * none is linked to the Page, or Instagram wasn't allowed in the login dialog.
+ */
+export type PageInstagram = 'linked' | 'none' | 'not-allowed';
+
+const INSTAGRAM_PERMISSIONS = ['instagram_basic', 'instagram_content_publish'];
+
+/** A Page's Instagram finding from its stored metadata; null for Pages connected before it was recorded. */
+export function pageInstagram(metadata: string | null): PageInstagram | null {
+  try {
+    const value = JSON.parse(metadata || '{}').instagram;
+    return value === 'linked' || value === 'none' || value === 'not-allowed' ? value : null;
+  } catch {
+    return null;
+  }
+}
+
 @Injectable()
 export class PlatformsService {
   private readonly logger = new Logger(PlatformsService.name);
@@ -47,7 +65,7 @@ export class PlatformsService {
   ) {}
 
   async getConnections(userId: string) {
-    return this.prisma.platformConnection.findMany({
+    const rows = await this.prisma.platformConnection.findMany({
       where: { userId },
       select: {
         id: true,
@@ -56,10 +74,16 @@ export class PlatformsService {
         accountId: true,
         accountName: true,
         scopes: true,
+        metadata: true,
         lastSyncAt: true,
         createdAt: true,
       },
     });
+    // A Facebook Page says whether it brought an Instagram account, so the provider
+    // can see why Instagram is missing. Metadata itself stays internal.
+    return rows.map(({ metadata, ...row }) =>
+      row.platform === Platform.FACEBOOK ? { ...row, instagram: pageInstagram(metadata) } : row,
+    );
   }
 
   async getConnection(userId: string, connectionId: string) {
@@ -144,9 +168,26 @@ export class PlatformsService {
     }
 
     const connections = [];
+    let granted: string | undefined;
 
     // Create connection for each page
     for (const page of pagesData.data || []) {
+      // Check for linked Instagram account
+      const igUrl = `https://graph.facebook.com/v18.0/${page.id}?fields=instagram_business_account&access_token=${page.access_token}`;
+      const igResponse = await fetch(igUrl);
+      const igData = await igResponse.json();
+
+      let instagram: PageInstagram = 'linked';
+      if (!igData.instagram_business_account) {
+        // Either no Instagram professional account is linked to this Page, or Instagram
+        // wasn't allowed in the login dialog. The granted permissions tell which.
+        granted ??= await this.grantedMetaPermissions(accessToken);
+        const allowed = granted === 'unknown' || INSTAGRAM_PERMISSIONS.every((p) => granted!.split(', ').includes(p));
+        instagram = allowed ? 'none' : 'not-allowed';
+        this.logger.warn(`Meta connect for ${userId}: Page ${page.id} brought no Instagram (${instagram}); granted permissions: ${granted}`);
+      }
+      const metadata = JSON.stringify({ instagram });
+
       const pageConnection = await this.prisma.platformConnection.upsert({
         where: {
           userId_platform_accountId: {
@@ -160,6 +201,7 @@ export class PlatformsService {
           tokenExpiry: new Date(Date.now() + expiresIn * 1000),
           status: ConnectionStatus.CONNECTED,
           accountName: page.name,
+          metadata,
         },
         create: {
           userId,
@@ -169,14 +211,10 @@ export class PlatformsService {
           accessToken: page.access_token,
           tokenExpiry: new Date(Date.now() + expiresIn * 1000),
           scopes: JSON.stringify(['pages_manage_posts', 'pages_read_engagement']),
+          metadata,
         },
       });
       connections.push(pageConnection);
-
-      // Check for linked Instagram account
-      const igUrl = `https://graph.facebook.com/v18.0/${page.id}?fields=instagram_business_account&access_token=${page.access_token}`;
-      const igResponse = await fetch(igUrl);
-      const igData = await igResponse.json();
 
       if (igData.instagram_business_account) {
         const igId = igData.instagram_business_account.id;
