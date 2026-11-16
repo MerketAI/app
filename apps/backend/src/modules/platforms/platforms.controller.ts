@@ -245,9 +245,12 @@ export class PlatformsController {
   @UseGuards(HybridAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get LinkedIn OAuth URL' })
-  async getLinkedInAuthUrl(@CurrentUser('id') userId: string) {
+  async getLinkedInAuthUrl(
+    @CurrentUser('id') userId: string,
+    @Query('returnUrl') returnUrl?: string,
+  ) {
     const redirectUri = `${this.configService.get('APP_URL')}/api/v1/platforms/oauth/linkedin/callback`;
-    const state = this.makeState(userId);
+    const state = this.makeState(userId, returnUrl);
     const url = await this.platformsService.getLinkedInAuthUrl(redirectUri, state);
     return { url };
   }
@@ -259,14 +262,20 @@ export class PlatformsController {
     @Query('state') state: string,
     @Res() res: Response,
   ) {
-    const { userId } = this.readState(state);
+    const { userId, returnUrl } = this.readState(state);
     const redirectUri = `${this.configService.get('APP_URL')}/api/v1/platforms/oauth/linkedin/callback`;
 
+    // The member pressed Cancel on LinkedIn's screen: there is no code to exchange.
+    if (!code) {
+      res.redirect(this.afterOAuth(returnUrl, 'error=linkedin&reason=cancelled'));
+      return;
+    }
     try {
       await this.platformsService.handleLinkedInCallback(userId, code, redirectUri);
-      res.redirect(`${this.configService.get('FRONTEND_URL')}/dashboard/platforms?success=linkedin`);
+      res.redirect(this.afterOAuth(returnUrl, 'success=linkedin'));
     } catch (error) {
-      res.redirect(`${this.configService.get('FRONTEND_URL')}/dashboard/platforms?error=linkedin`);
+      this.logger.error(`LinkedIn connect for ${userId} failed`, error as Error);
+      res.redirect(this.afterOAuth(returnUrl, 'error=linkedin'));
     }
   }
 

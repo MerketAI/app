@@ -45,6 +45,9 @@ export type PageInstagram = 'linked' | 'none' | 'not-allowed';
 
 const INSTAGRAM_PERMISSIONS = ['instagram_basic', 'instagram_content_publish'];
 
+/** LinkedIn: sign-in (OpenID Connect) to name the member, and posting as them. */
+export const LINKEDIN_SCOPES = ['openid', 'profile', 'w_member_social'];
+
 /** A Page's Instagram finding from its stored metadata; null for Pages connected before it was recorded. */
 export function pageInstagram(metadata: string | null): PageInstagram | null {
   try {
@@ -441,13 +444,10 @@ export class PlatformsService {
   // LinkedIn OAuth
   async getLinkedInAuthUrl(redirectUri: string, state: string) {
     const clientId = await this.credentialsService.get('LINKEDIN_CLIENT_ID');
-    const scopes = [
-      'w_member_social',
-      'r_liteprofile',
-      'openid',
-      'profile',
-      'email',
-    ].join(' ');
+    // "Sign In with LinkedIn using OpenID Connect" (openid, profile) names the member;
+    // "Share on LinkedIn" (w_member_social) posts as them. r_liteprofile is retired and
+    // makes LinkedIn refuse the whole request for new apps.
+    const scopes = LINKEDIN_SCOPES.join(' ');
 
     return `https://www.linkedin.com/oauth/v2/authorization?response_type=code&client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scopes)}&state=${state}`;
   }
@@ -469,16 +469,23 @@ export class PlatformsService {
       }),
     });
 
-    const tokenData: OAuthTokenResponse = await tokenResponse.json();
+    const tokenData: OAuthTokenResponse & { error?: string; error_description?: string } = await tokenResponse.json();
 
     if (!tokenData.access_token) {
-      throw new BadRequestException('Failed to obtain LinkedIn access token');
+      const why = tokenData.error_description || tokenData.error || `HTTP ${tokenResponse.status}`;
+      this.logger.warn(`LinkedIn connect for ${userId}: no access token (${why})`);
+      throw new BadRequestException(`Failed to obtain LinkedIn access token: ${why}`);
     }
 
     // Get user profile info using OpenID userinfo endpoint
     const profileResponse = await fetch('https://api.linkedin.com/v2/userinfo', {
       headers: { Authorization: `Bearer ${tokenData.access_token}` },
     });
+    if (!profileResponse.ok) {
+      // Without "Sign In with LinkedIn using OpenID Connect" on the app, userinfo is refused.
+      this.logger.warn(`LinkedIn connect for ${userId}: userinfo HTTP ${profileResponse.status}`);
+      throw new BadRequestException('LinkedIn did not share the member profile');
+    }
 
     const profileData = await profileResponse.json();
 
@@ -501,7 +508,7 @@ export class PlatformsService {
           : new Date(Date.now() + 60 * 24 * 60 * 60 * 1000), // Default 60 days
         status: ConnectionStatus.CONNECTED,
         accountName,
-        scopes: JSON.stringify(['w_member_social', 'r_liteprofile', 'openid', 'profile', 'email']),
+        scopes: JSON.stringify(LINKEDIN_SCOPES),
       },
       create: {
         userId,
@@ -513,8 +520,8 @@ export class PlatformsService {
         tokenExpiry: tokenData.expires_in
           ? new Date(Date.now() + tokenData.expires_in * 1000)
           : new Date(Date.now() + 60 * 24 * 60 * 60 * 1000),
-        scopes: JSON.stringify(['w_member_social', 'r_liteprofile', 'openid', 'profile', 'email']),
-        metadata: JSON.stringify({ linkedInId: accountId, email: profileData.email }),
+        scopes: JSON.stringify(LINKEDIN_SCOPES),
+        metadata: JSON.stringify({ linkedInId: accountId }),
       },
     });
 

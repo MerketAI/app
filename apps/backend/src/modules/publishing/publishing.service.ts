@@ -12,7 +12,7 @@ import {
 } from '../../common/utils/json-field.util';
 const Platform = { INSTAGRAM: 'INSTAGRAM', FACEBOOK: 'FACEBOOK', WORDPRESS: 'WORDPRESS', LINKEDIN: 'LINKEDIN', TIKTOK: 'TIKTOK' } as const;
 const ContentStatus = { DRAFT: 'DRAFT', READY: 'READY', SCHEDULED: 'SCHEDULED', PUBLISHING: 'PUBLISHING', PUBLISHED: 'PUBLISHED', FAILED: 'FAILED' } as const;
-const ContentType = { INSTAGRAM_IMAGE: 'INSTAGRAM_IMAGE', INSTAGRAM_CAROUSEL: 'INSTAGRAM_CAROUSEL', INSTAGRAM_REEL: 'INSTAGRAM_REEL', INSTAGRAM_STORY: 'INSTAGRAM_STORY', FACEBOOK_IMAGE: 'FACEBOOK_IMAGE', FACEBOOK_VIDEO: 'FACEBOOK_VIDEO', FACEBOOK_LINK: 'FACEBOOK_LINK', BLOG_POST: 'BLOG_POST' } as const;
+const ContentType = { INSTAGRAM_IMAGE: 'INSTAGRAM_IMAGE', INSTAGRAM_CAROUSEL: 'INSTAGRAM_CAROUSEL', INSTAGRAM_REEL: 'INSTAGRAM_REEL', INSTAGRAM_STORY: 'INSTAGRAM_STORY', FACEBOOK_IMAGE: 'FACEBOOK_IMAGE', FACEBOOK_VIDEO: 'FACEBOOK_VIDEO', FACEBOOK_LINK: 'FACEBOOK_LINK', BLOG_POST: 'BLOG_POST', LINKEDIN_POST: 'LINKEDIN_POST' } as const;
 type ContentType = typeof ContentType[keyof typeof ContentType];
 
 interface PublishResult {
@@ -396,22 +396,30 @@ export class PublishingService {
       ]
         .filter(Boolean)
         .join('\n\n');
-      const hasMedia = content.mediaUrls.length > 0;
+      const images = content.mediaUrls.filter((url) => !isVideoUrl(url)).slice(0, 9);
+      if (content.mediaUrls.length && !images.length) {
+        return { success: false, error: 'LinkedIn posts here take pictures only; this post has a video.' };
+      }
+
+      // A share can't point at a picture by URL: each one is uploaded to LinkedIn first
+      // and referenced by the asset it returns.
+      const assets: string[] = [];
+      for (const url of images) {
+        assets.push(await this.uploadLinkedInImage(url, authorId, accessToken));
+      }
 
       const shareContent: any = {
         shareCommentary: {
           text: text.substring(0, 3000), // LinkedIn character limit
         },
-        shareMediaCategory: hasMedia ? 'IMAGE' : 'NONE',
+        shareMediaCategory: assets.length ? 'IMAGE' : 'NONE',
       };
 
-      if (hasMedia) {
-        shareContent.media = content.mediaUrls.slice(0, 9).map((url: string) => ({
+      if (assets.length) {
+        shareContent.media = assets.map((asset) => ({
           status: 'READY',
-          originalUrl: url,
-          description: {
-            text: content.title || '',
-          },
+          media: asset,
+          title: { text: (content.title || '').substring(0, 200) },
         }));
       }
 
@@ -662,6 +670,46 @@ export class PublishingService {
     return null;
   }
 
+  /** Uploads one picture to LinkedIn for a member's share and returns its asset URN. */
+  private async uploadLinkedInImage(url: string, personId: string, accessToken: string): Promise<string> {
+    const register = await fetch('https://api.linkedin.com/v2/assets?action=registerUpload', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+        'X-Restli-Protocol-Version': '2.0.0',
+      },
+      body: JSON.stringify({
+        registerUploadRequest: {
+          recipes: ['urn:li:digitalmediaRecipe:feedshare-image'],
+          owner: `urn:li:person:${personId}`,
+          serviceRelationships: [{ relationshipType: 'OWNER', identifier: 'urn:li:userGeneratedContent' }],
+        },
+      }),
+    });
+    const registered: any = await register.json();
+    const uploadUrl =
+      registered?.value?.uploadMechanism?.['com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest']?.uploadUrl;
+    const asset = registered?.value?.asset;
+    if (!register.ok || !uploadUrl || !asset) {
+      throw new Error(`LinkedIn would not take the picture: ${registered?.message || `HTTP ${register.status}`}`);
+    }
+
+    const image = await fetch(url);
+    if (!image.ok) throw new Error(`Could not read the post picture (HTTP ${image.status})`);
+    const bytes = Buffer.from(await image.arrayBuffer());
+    const put = await fetch(uploadUrl, {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': image.headers.get('content-type') || 'image/png',
+      },
+      body: bytes,
+    });
+    if (!put.ok) throw new Error(`Uploading the picture to LinkedIn failed (HTTP ${put.status})`);
+    return asset;
+  }
+
   private getCreditAction(contentType: ContentType): string {
     const mapping: Record<ContentType, string> = {
       [ContentType.INSTAGRAM_IMAGE]: 'INSTAGRAM_IMAGE',
@@ -672,6 +720,7 @@ export class PublishingService {
       [ContentType.FACEBOOK_VIDEO]: 'FACEBOOK_VIDEO',
       [ContentType.FACEBOOK_LINK]: 'FACEBOOK_LINK',
       [ContentType.BLOG_POST]: 'BLOG_POST_500',
+      [ContentType.LINKEDIN_POST]: 'LINKEDIN_POST',
     };
     return mapping[contentType] || 'INSTAGRAM_IMAGE';
   }
@@ -686,6 +735,7 @@ export class PublishingService {
       FACEBOOK_LINK: 3,
       BLOG_POST_500: 10,
       BLOG_POST_1000: 20,
+      LINKEDIN_POST: 5,
     };
     return costs[action] || 5;
   }

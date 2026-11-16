@@ -46,6 +46,7 @@ const DRAFT_TYPES: Record<string, string> = {
   instagram: 'INSTAGRAM_IMAGE',
   facebook: 'FACEBOOK_IMAGE',
   blog: 'BLOG_POST',
+  linkedin: 'LINKEDIN_POST',
 };
 
 /** One line per theme for the model. Static, so it caches. */
@@ -233,7 +234,7 @@ const TOOLS: any[] = [
     input_schema: {
       type: 'object',
       properties: {
-        platform: { type: 'string', enum: ['facebook', 'instagram', 'blog'] },
+        platform: { type: 'string', enum: ['facebook', 'instagram', 'linkedin', 'blog'] },
         title: { type: 'string', description: 'Blog title, or a short internal label for a post.' },
         caption: {
           type: 'string',
@@ -652,6 +653,9 @@ export class AgentService {
       case 'save_post_draft': {
         // A video makes the post a Reel or a Facebook video.
         const isVideo = (input.mediaUrls || []).some((u: string) => /\.mp4(\?|$)/i.test(String(u)));
+        if (isVideo && input.platform === 'linkedin') {
+          throw new Error("LinkedIn posts take pictures only. Use the reel's images, or save the video for Instagram or Facebook.");
+        }
         const type = isVideo ? VIDEO_TYPES[input.platform] : DRAFT_TYPES[input.platform];
         if (!type) throw new Error(`Unknown platform: ${input.platform}`);
         if (input.platform === 'instagram' && !(input.mediaUrls || []).length) {

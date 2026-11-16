@@ -45,6 +45,7 @@ export function bookingLinks(bookingUrl?: string | null): Record<string, string>
   const link = (source: string, medium: string) => trackedUrl(bookingUrl, { source, medium });
   return {
     facebook: link('facebook', 'social'),
+    linkedin: link('linkedin', 'social'),
     instagram_bio: link('instagram', 'bio'),
     whatsapp: link('whatsapp', 'message'),
     google: link('google', 'business_profile'),
