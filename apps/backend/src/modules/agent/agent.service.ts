@@ -16,6 +16,7 @@ import { THEME_IDS, THEMES } from '../design/post-themes';
 import { bookingLinks } from '../design/qr';
 import { healthDaysBetween, isoDate, seasonalTopicsBetween } from '../content/health-calendar';
 import { istDate, plannedInstant } from '../content/content-calendar.service';
+import { assertPublishable, tidyCaption } from './post-text';
 
 /** A planned_for value: "" or missing means none; anything else must be a real date. */
 function plannedDate(value: unknown): string | null {
@@ -234,7 +235,11 @@ const TOOLS: any[] = [
       properties: {
         platform: { type: 'string', enum: ['facebook', 'instagram', 'blog'] },
         title: { type: 'string', description: 'Blog title, or a short internal label for a post.' },
-        caption: { type: 'string', description: 'The post text. For a blog, a short summary.' },
+        caption: {
+          type: 'string',
+          description:
+            'The post text exactly as it will be published: only what the audience reads, with no bracketed notes, slide lists or scripts. For a blog, a short summary.',
+        },
         body: { type: 'string', description: 'Full article text for a blog; empty for social posts.' },
         hashtags: { type: 'array', items: { type: 'string' } },
         mediaUrls: { type: 'array', items: { type: 'string' } },
@@ -653,6 +658,8 @@ export class AgentService {
           throw new Error('Instagram posts need an image. Attach one or call create_post_image first.');
         }
         const plannedFor = plannedDate(input.planned_for);
+        assertPublishable(input.caption);
+        input.caption = tidyCaption(input.caption || '');
         const draft = await this.prisma.content.create({
           data: {
             userId,
@@ -749,6 +756,10 @@ export class AgentService {
         const changes = ['title', 'caption', 'body', 'hashtags', 'mediaUrls', 'planned_for'].filter((k) => input[k] !== undefined);
         const replan = input.planned_for !== undefined;
         const plannedFor = replan ? plannedDate(input.planned_for) : null;
+        if (input.caption !== undefined) {
+          assertPublishable(input.caption);
+          input.caption = tidyCaption(input.caption);
+        }
         if (changes.length === 0) {
           // Without this, the model used an empty update as a way to read a draft.
           throw new Error('Nothing to change. To read a draft, use get_draft.');
