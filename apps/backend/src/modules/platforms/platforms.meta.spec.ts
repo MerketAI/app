@@ -1,4 +1,4 @@
-import { MetaConnectError, PlatformsService } from './platforms.service';
+import { MetaConnectError, PlatformsService, pageInstagram } from './platforms.service';
 
 /** Answers Graph API calls by URL fragment, in the order the callback makes them. */
 function graph(routes: Record<string, unknown>) {
@@ -54,5 +54,58 @@ describe('PlatformsService.handleMetaCallback', () => {
     const { connections } = await service.handleMetaCallback('u1', 'code', 'https://x/cb');
     expect(connections).toHaveLength(1);
     expect(connections[0]).toMatchObject({ platform: 'FACEBOOK', accountName: 'Clinic' });
+  });
+
+  const login = {
+    'grant_type=fb_exchange_token': { access_token: 'long' },
+    'oauth/access_token': { access_token: 'short' },
+    'me/accounts': { data: [{ id: 'p1', name: 'Clinic', access_token: 'pt' }] },
+  };
+  const allowed = {
+    data: ['pages_show_list', 'instagram_basic', 'instagram_content_publish'].map((permission) => ({ permission, status: 'granted' })),
+  };
+
+  it('marks a Page with no Instagram linked, when Instagram was allowed', async () => {
+    global.fetch = graph({ ...login, 'fields=instagram_business_account': {}, 'me/permissions': allowed }) as any;
+    const { connections } = await service.handleMetaCallback('u1', 'code', 'https://x/cb');
+    expect(pageInstagram(connections[0].metadata)).toBe('none');
+  });
+
+  it('marks a Page whose Instagram was not allowed at login', async () => {
+    global.fetch = graph({
+      ...login,
+      'fields=instagram_business_account': {},
+      'me/permissions': { data: [{ permission: 'pages_show_list', status: 'granted' }] },
+    }) as any;
+    const { connections } = await service.handleMetaCallback('u1', 'code', 'https://x/cb');
+    expect(pageInstagram(connections[0].metadata)).toBe('not-allowed');
+  });
+
+  it('saves the Instagram account and marks the Page linked', async () => {
+    global.fetch = graph({
+      ...login,
+      'fields=instagram_business_account': { instagram_business_account: { id: 'ig1' } },
+      'fields=username': { username: 'clinic.hyd' },
+    }) as any;
+    const { connections } = await service.handleMetaCallback('u1', 'code', 'https://x/cb');
+    expect(connections.map((c) => c.platform)).toEqual(['FACEBOOK', 'INSTAGRAM']);
+    expect(pageInstagram(connections[0].metadata)).toBe('linked');
+    expect(connections[1]).toMatchObject({ accountName: 'clinic.hyd' });
+  });
+});
+
+describe('PlatformsService.getConnections', () => {
+  it("shows a Page's Instagram finding and keeps metadata internal", async () => {
+    const findMany = jest.fn(async () => [
+      { id: '1', platform: 'FACEBOOK', accountName: 'Clinic', metadata: '{"instagram":"none"}' },
+      { id: '2', platform: 'FACEBOOK', accountName: 'Old Page', metadata: null },
+      { id: '3', platform: 'INSTAGRAM', accountName: 'clinic.hyd', metadata: '{"linkedPageId":"p9"}' },
+    ]);
+    const service = new PlatformsService({ platformConnection: { findMany } } as any, {} as any);
+    expect(await service.getConnections('u1')).toEqual([
+      { id: '1', platform: 'FACEBOOK', accountName: 'Clinic', instagram: 'none' },
+      { id: '2', platform: 'FACEBOOK', accountName: 'Old Page', instagram: null },
+      { id: '3', platform: 'INSTAGRAM', accountName: 'clinic.hyd' },
+    ]);
   });
 });
