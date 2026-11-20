@@ -24,6 +24,7 @@ const ContentType = {
   FACEBOOK_LINK: 'FACEBOOK_LINK',
   BLOG_POST: 'BLOG_POST',
   LINKEDIN_POST: 'LINKEDIN_POST',
+  GOOGLE_POST: 'GOOGLE_POST',
 } as const;
 type ContentType = typeof ContentType[keyof typeof ContentType];
 
@@ -57,6 +58,7 @@ const CONTENT_TYPE_TO_CREDIT_ACTION: Record<ContentType, string> = {
   [ContentType.FACEBOOK_LINK]: 'FACEBOOK_LINK',
   [ContentType.BLOG_POST]: 'BLOG_POST_500',
   [ContentType.LINKEDIN_POST]: 'LINKEDIN_POST',
+  [ContentType.GOOGLE_POST]: 'GOOGLE_POST',
 };
 
 @Injectable()

@@ -22,7 +22,7 @@ import {
 } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import { DriveService } from './drive.service';
-import { MetaConnectError, PlatformsService } from './platforms.service';
+import { GoogleConnectError, MetaConnectError, PlatformsService } from './platforms.service';
 import { HybridAuthGuard } from '../partner/guards/hybrid-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import {
@@ -95,6 +95,44 @@ export class PlatformsController {
       const reason = error instanceof MetaConnectError ? error.reason : 'unknown';
       if (reason === 'unknown') this.logger.error(`Meta connect for ${userId} failed`, error as Error);
       res.redirect(this.afterOAuth(returnUrl, `error=meta&reason=${reason}`));
+    }
+  }
+
+  // Google Business Profile (posting to the provider's own listings)
+  @Get('oauth/google-business')
+  @UseGuards(HybridAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get Google Business Profile OAuth URL' })
+  async getGoogleBusinessAuthUrl(
+    @CurrentUser('id') userId: string,
+    @Query('returnUrl') returnUrl?: string,
+  ) {
+    const redirectUri = `${this.configService.get('APP_URL')}/api/v1/platforms/oauth/google-business/callback`;
+    const state = this.makeState(userId, returnUrl);
+    const url = await this.platformsService.getGoogleBusinessAuthUrl(redirectUri, state);
+    return { url };
+  }
+
+  @Get('oauth/google-business/callback')
+  @ApiOperation({ summary: 'Google Business Profile OAuth callback' })
+  async handleGoogleBusinessCallback(
+    @Query('code') code: string,
+    @Query('state') state: string,
+    @Res() res: Response,
+  ) {
+    const { userId, returnUrl } = this.readState(state);
+    const redirectUri = `${this.configService.get('APP_URL')}/api/v1/platforms/oauth/google-business/callback`;
+    if (!code) {
+      res.redirect(this.afterOAuth(returnUrl, 'error=google-business&reason=cancelled'));
+      return;
+    }
+    try {
+      await this.platformsService.handleGoogleBusinessCallback(userId, code, redirectUri);
+      res.redirect(this.afterOAuth(returnUrl, 'success=google-business'));
+    } catch (error) {
+      const reason = error instanceof GoogleConnectError ? error.reason : 'unknown';
+      if (reason === 'unknown') this.logger.error(`Google Business connect for ${userId} failed`, error as Error);
+      res.redirect(this.afterOAuth(returnUrl, `error=google-business&reason=${reason}`));
     }
   }
 

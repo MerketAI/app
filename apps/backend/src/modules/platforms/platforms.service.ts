@@ -48,6 +48,26 @@ const INSTAGRAM_PERMISSIONS = ['instagram_basic', 'instagram_content_publish'];
 /** LinkedIn: sign-in (OpenID Connect) to name the member, and posting as them. */
 export const LINKEDIN_SCOPES = ['openid', 'profile', 'w_member_social'];
 
+/** Google Business Profile: manage the provider's own listings (posts), nothing else. */
+export const GOOGLE_BUSINESS_SCOPES = ['https://www.googleapis.com/auth/business.manage'];
+
+/** Why a Google Business Profile connection saved nothing; handed back as `reason=`. */
+export class GoogleConnectError extends Error {
+  constructor(
+    readonly reason: 'google' | 'no-locations',
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
+interface GoogleLocation {
+  name: string; // "locations/123"
+  title?: string;
+  websiteUri?: string;
+  storefrontAddress?: { locality?: string };
+}
+
 /** A Page's Instagram finding from its stored metadata; null for Pages connected before it was recorded. */
 export function pageInstagram(metadata: string | null): PageInstagram | null {
   try {
@@ -381,6 +401,105 @@ export class PlatformsService {
         scopes: JSON.stringify(['drive.file']),
       },
     });
+  }
+
+  /**
+   * Google Business Profile: the provider signs in with the Google account that manages
+   * their listing, and each location becomes a connection they can post to. Uses the
+   * project allowlisted for the Business Profile APIs (GOOGLE_CLIENT_ID's project).
+   */
+  async getGoogleBusinessAuthUrl(redirectUri: string, state: string) {
+    const clientId = await this.credentialsService.get('GOOGLE_CLIENT_ID');
+    const scope = encodeURIComponent(GOOGLE_BUSINESS_SCOPES.join(' '));
+    return `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${scope}&state=${state}&response_type=code&access_type=offline&prompt=consent`;
+  }
+
+  async handleGoogleBusinessCallback(userId: string, code: string, redirectUri: string) {
+    const clientId = await this.credentialsService.get('GOOGLE_CLIENT_ID');
+    const clientSecret = await this.credentialsService.get('GOOGLE_CLIENT_SECRET');
+    const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        code,
+        client_id: clientId!,
+        client_secret: clientSecret!,
+        redirect_uri: redirectUri,
+        grant_type: 'authorization_code',
+      }),
+    });
+    const tokens: OAuthTokenResponse & { error_description?: string; error?: string } = await tokenResponse.json();
+    if (!tokens.access_token) {
+      const why = tokens.error_description || tokens.error || `HTTP ${tokenResponse.status}`;
+      this.logger.warn(`Google Business connect for ${userId}: no access token (${why})`);
+      throw new GoogleConnectError('google', `Google sign-in failed: ${why}`);
+    }
+
+    // Every location the signed-in account manages, across its accounts (personal and
+    // location groups). Each becomes a connection the provider can post to.
+    const headers = { Authorization: `Bearer ${tokens.access_token}` };
+    const accountsRes = await fetch('https://mybusinessaccountmanagement.googleapis.com/v1/accounts?pageSize=20', { headers });
+    const accountsBody: any = await accountsRes.json();
+    if (!accountsRes.ok) {
+      const why = accountsBody?.error?.message || `HTTP ${accountsRes.status}`;
+      this.logger.warn(`Google Business connect for ${userId}: listing accounts failed (${why})`);
+      throw new GoogleConnectError('google', `Listing Business Profile accounts failed: ${why}`);
+    }
+
+    const found: { account: string; location: GoogleLocation }[] = [];
+    for (const account of accountsBody.accounts || []) {
+      const url = `https://mybusinessbusinessinformation.googleapis.com/v1/${account.name}/locations?readMask=name,title,storefrontAddress,websiteUri&pageSize=100`;
+      const res = await fetch(url, { headers });
+      const body: any = await res.json();
+      if (!res.ok) {
+        this.logger.warn(`Google Business connect for ${userId}: locations of ${account.name} failed (${body?.error?.message || res.status})`);
+        continue;
+      }
+      for (const location of body.locations || []) found.push({ account: account.name, location });
+    }
+    if (!found.length) {
+      this.logger.warn(`Google Business connect for ${userId}: no locations`);
+      throw new GoogleConnectError('no-locations', 'No Business Profile locations were found for this Google account');
+    }
+
+    const tokenExpiry = tokens.expires_in ? new Date(Date.now() + tokens.expires_in * 1000) : null;
+    const connections = [];
+    for (const { account, location } of found) {
+      // The v4 posting API addresses a location as accounts/{a}/locations/{l}.
+      const accountId = `${account}/${location.name}`;
+      const city = location.storefrontAddress?.locality;
+      const title = location.title || 'Business Profile';
+      const fields = {
+        accessToken: tokens.access_token,
+        tokenExpiry,
+        status: ConnectionStatus.CONNECTED,
+        accountName: city ? `${title} (${city})` : title,
+        metadata: JSON.stringify({ websiteUri: location.websiteUri || null }),
+      };
+      connections.push(
+        await this.prisma.platformConnection.upsert({
+          where: { userId_platform_accountId: { userId, platform: Platform.GOOGLE_MY_BUSINESS, accountId } },
+          update: { ...fields, ...(tokens.refresh_token ? { refreshToken: tokens.refresh_token } : {}) },
+          create: {
+            ...fields,
+            userId,
+            platform: Platform.GOOGLE_MY_BUSINESS,
+            accountId,
+            refreshToken: tokens.refresh_token,
+            scopes: JSON.stringify(['business.manage']),
+          },
+        }),
+      );
+    }
+    return { connections };
+  }
+
+  /** A connection's access token, refreshed first when it expires within a minute. */
+  async freshAccessToken(connection: { id: string; accessToken: string; tokenExpiry: Date | null }) {
+    if (connection.tokenExpiry && connection.tokenExpiry.getTime() > Date.now() + 60_000) {
+      return connection.accessToken;
+    }
+    return (await this.refreshToken(connection.id)).accessToken;
   }
 
   /** A live Drive access token for this user's connection, refreshed when close to expiry. */

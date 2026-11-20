@@ -54,6 +54,7 @@ export const CREDIT_COSTS: Record<string, number> = {
   VIDEO_GENERATE: 30,
   VIDEO_THUMBNAIL: 5,
   LINKEDIN_POST: 5,
+  GOOGLE_POST: 5,
   TIKTOK_POST: 5,
 };
 

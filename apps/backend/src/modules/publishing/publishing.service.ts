@@ -2,18 +2,20 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  Optional,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 import { assertPublishable } from '../agent/post-text';
+import { PlatformsService } from '../platforms/platforms.service';
 import {
   parseJsonArray,
   normalizeHashtags,
   formatHashtags,
 } from '../../common/utils/json-field.util';
-const Platform = { INSTAGRAM: 'INSTAGRAM', FACEBOOK: 'FACEBOOK', WORDPRESS: 'WORDPRESS', LINKEDIN: 'LINKEDIN', TIKTOK: 'TIKTOK' } as const;
+const Platform = { INSTAGRAM: 'INSTAGRAM', FACEBOOK: 'FACEBOOK', WORDPRESS: 'WORDPRESS', LINKEDIN: 'LINKEDIN', TIKTOK: 'TIKTOK', GOOGLE_MY_BUSINESS: 'GOOGLE_MY_BUSINESS' } as const;
 const ContentStatus = { DRAFT: 'DRAFT', READY: 'READY', SCHEDULED: 'SCHEDULED', PUBLISHING: 'PUBLISHING', PUBLISHED: 'PUBLISHED', FAILED: 'FAILED' } as const;
-const ContentType = { INSTAGRAM_IMAGE: 'INSTAGRAM_IMAGE', INSTAGRAM_CAROUSEL: 'INSTAGRAM_CAROUSEL', INSTAGRAM_REEL: 'INSTAGRAM_REEL', INSTAGRAM_STORY: 'INSTAGRAM_STORY', FACEBOOK_IMAGE: 'FACEBOOK_IMAGE', FACEBOOK_VIDEO: 'FACEBOOK_VIDEO', FACEBOOK_LINK: 'FACEBOOK_LINK', BLOG_POST: 'BLOG_POST', LINKEDIN_POST: 'LINKEDIN_POST' } as const;
+const ContentType = { INSTAGRAM_IMAGE: 'INSTAGRAM_IMAGE', INSTAGRAM_CAROUSEL: 'INSTAGRAM_CAROUSEL', INSTAGRAM_REEL: 'INSTAGRAM_REEL', INSTAGRAM_STORY: 'INSTAGRAM_STORY', FACEBOOK_IMAGE: 'FACEBOOK_IMAGE', FACEBOOK_VIDEO: 'FACEBOOK_VIDEO', FACEBOOK_LINK: 'FACEBOOK_LINK', BLOG_POST: 'BLOG_POST', LINKEDIN_POST: 'LINKEDIN_POST', GOOGLE_POST: 'GOOGLE_POST' } as const;
 type ContentType = typeof ContentType[keyof typeof ContentType];
 
 interface PublishResult {
@@ -48,11 +50,31 @@ export function isVideoUrl(url: string | undefined): boolean {
   return !!url && /\.(mp4|mov)(\?|$)/i.test(url);
 }
 
+/**
+ * A Google post's text and its button link. Google shows no clickable links in posts,
+ * ignores hashtags and allows 1,500 characters, so the first link becomes the post's
+ * button, and links, "Book: <link>" lines and hashtags come out of the text.
+ */
+export function googlePostText(caption: string): { summary: string; link?: string } {
+  const link = caption.match(/https?:\/\/[^\s)]+/)?.[0];
+  const summary = caption
+    .split('\n')
+    .map((line) => line.replace(/https?:\/\/[^\s)]+/g, '').replace(/(^|\s)#[\p{L}\p{N}_]+/gu, '').trimEnd())
+    // What was "Book: <link>" is now a bare "Book:", which the button replaces.
+    .filter((line) => !/^\s*[\p{L} ]{1,40}:$/u.test(line))
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+    .substring(0, 1500);
+  return { summary, ...(link ? { link } : {}) };
+}
+
 @Injectable()
 export class PublishingService {
   constructor(
     private prisma: PrismaService,
     private subscriptionsService: SubscriptionsService,
+    @Optional() private platforms?: PlatformsService,
   ) {}
 
   async publishNow(userId: string, contentId: string, connectionId?: string) {
@@ -137,6 +159,9 @@ export class PublishingService {
           break;
         case Platform.TIKTOK:
           result = await this.publishToTikTok(publishable, connection);
+          break;
+        case Platform.GOOGLE_MY_BUSINESS:
+          result = await this.publishToGoogleBusiness(publishable, connection);
           break;
         default:
           throw new BadRequestException(`Publishing to ${connection.platform} is not supported yet`);
@@ -388,6 +413,37 @@ export class PublishingService {
         platformPostId: data.ID?.toString(),
         platformPostUrl: data.URL,
       };
+    } catch (error) {
+      return { success: false, error: (error as Error).message };
+    }
+  }
+
+  /**
+   * A post on the provider's Google Business Profile (shown in Search and Maps). Google
+   * shows no clickable links in the text, so the first link in the caption becomes the
+   * post's button: "Book" for the booking page, "Learn more" otherwise. Hashtags are
+   * dropped; they mean nothing on Google. One picture at most.
+   */
+  async publishToGoogleBusiness(content: PublishableContent, connection: any): Promise<PublishResult> {
+    if (!this.platforms) return { success: false, error: 'Google Business Profile publishing is not available here.' };
+    try {
+      const { summary, link } = googlePostText(content.caption || content.body || '');
+      const photo = content.mediaUrls.find((url) => !isVideoUrl(url));
+      const post: any = { languageCode: 'en', topicType: 'STANDARD', summary };
+      if (photo) post.media = [{ mediaFormat: 'PHOTO', sourceUrl: photo }];
+      if (link) post.callToAction = { actionType: /book|appointment|utm_source=google/i.test(link) ? 'BOOK' : 'LEARN_MORE', url: link };
+
+      const accessToken = await this.platforms.freshAccessToken(connection);
+      const response = await fetch(`https://mybusiness.googleapis.com/v4/${connection.accountId}/localPosts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify(post),
+      });
+      const data: any = await response.json();
+      if (!response.ok) {
+        return { success: false, error: data?.error?.message || `Google Business Profile publishing failed (HTTP ${response.status})` };
+      }
+      return { success: true, platformPostId: data.name, platformPostUrl: data.searchUrl };
     } catch (error) {
       return { success: false, error: (error as Error).message };
     }
@@ -732,6 +788,7 @@ export class PublishingService {
       [ContentType.FACEBOOK_LINK]: 'FACEBOOK_LINK',
       [ContentType.BLOG_POST]: 'BLOG_POST_500',
       [ContentType.LINKEDIN_POST]: 'LINKEDIN_POST',
+      [ContentType.GOOGLE_POST]: 'GOOGLE_POST',
     };
     return mapping[contentType] || 'INSTAGRAM_IMAGE';
   }
@@ -747,6 +804,7 @@ export class PublishingService {
       BLOG_POST_500: 10,
       BLOG_POST_1000: 20,
       LINKEDIN_POST: 5,
+      GOOGLE_POST: 5,
     };
     return costs[action] || 5;
   }
