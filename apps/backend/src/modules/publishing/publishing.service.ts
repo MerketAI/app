@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SubscriptionsService } from '../subscriptions/subscriptions.service';
+import { assertPublishable } from '../agent/post-text';
 import {
   parseJsonArray,
   normalizeHashtags,
@@ -70,6 +71,16 @@ export class PublishingService {
 
     if (content.status === ContentStatus.PUBLISHED) {
       throw new BadRequestException('Content is already published');
+    }
+
+    // Drafts saved before captions were checked can still hold notes such as
+    // "[REEL SCRIPT – for filming, not for posting]": never send those out.
+    try {
+      assertPublishable(content.caption);
+    } catch {
+      throw new BadRequestException(
+        'This draft still has notes that are not meant for posting (for example a [REEL SCRIPT] or [CAPTION TO POST] line). Edit the post text, or ask the assistant to clean up this draft, then publish.',
+      );
     }
 
     // Get connection
